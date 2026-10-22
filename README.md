@@ -54,7 +54,7 @@
 
 ## 发布与验证
 
-静态文件部署到本仓库的 GitHub Pages。首次启用时，请在 Settings → Pages 中选择 main 分支和 /(root) 作为发布源。此前的[二维数值验收记录](./validation/)不能自动证明新三维模型在所有条件下具有工程实测精度。
+静态文件通过本仓库的 GitHub Actions 工作流部署到 GitHub Pages。首次启用时，请在 Settings → Pages → Build and deployment → Source 中选择 GitHub Actions。此前的[二维数值验收记录](./validation/)不能自动证明新三维模型在所有条件下具有工程实测精度。
 
 ## 2026-10-21 · CST式交互色标
 
