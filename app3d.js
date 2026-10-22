@@ -33,19 +33,19 @@ function renderNodes(){
   const cells=document.createElement("div");cells.className="node-fields";
   [["x","X / m"],["y","Y / m"],["z","Z / m"],["phase","相位 / °"],["power","功率 / kW"]].forEach(pair=>{
    const d=document.createElement("div"),label=document.createElement("label"),input=document.createElement("input");
-   const key=pair[0];label.textContent=pair[1];input.type="number";input.step="any";input.value=key==="power"?nd.power/1000:nd[key];input.min=key==="power"?"0":"";
+   const key=pair[0];label.textContent=pair[1];input.type="number";input.step="any";input.value=key==="power"?nd[key]/1000:nd[key];input.min=key==="power"?"0":"";
    input.setAttribute("aria-label","节点"+(i+1)+" "+pair[1]);
    input.addEventListener("change",()=>{
     const num=Number(input.value);
-    if(!Number.isFinite(num)||input.value.trim()===""||(key==="power"&&num<0)){input.value=key==="power"?nd.power/1000:nd[key];return;}
-    nd[key]=key==="power"?num*1000:num;input.value=String(num);queue();
+    if(!Number.isFinite(num)||input.value.trim()===""||(key==="power"&&num<0)){input.value=key==="power"?nd[key]/1000:nd[key];return;}
+    nd[key]=key==="power"?num*1000:num;
+    input.value=String(key==="power"?nd[key]/1000:nd[key]);queue();
    });
    d.appendChild(label);d.appendChild(input);cells.appendChild(d);
   });
   e.appendChild(cells);root.appendChild(e);
  });
 }
-
 function ePhasorPower(a){
  return a.erx*a.erx+a.eix*a.eix+a.ery*a.ery+a.eiy*a.eiy+a.erz*a.erz+a.eiz*a.eiz;
 }
@@ -251,9 +251,9 @@ function exportScanCSV(){
 function configObject(){
  return {
   application:"Wave Lab",schemaVersion:1,exportedAt:new Date().toISOString(),
-  parameters:{freq:state.freq,apX:state.apX,apY:state.apY,eta:state.eta,pointsPerWave:state.pointsPerWave,
+  parameters:{freq:state.freq,apX:state.apX,apY:state.apY,eta:state.eta,pointsPerWave:state.pointsPerWave,powerUnit:"kW",
    Lx:state.Lx,Ly:state.Ly,Lz:state.Lz,zMin:state.zMin,centerX:state.centerX,centerY:state.centerY,
-   target:{...state.target},cuts:{...state.cuts},nodes:state.nodes.map(n=>({x:n.x,y:n.y,z:n.z,phase:n.phase,power:n.power}))},
+   target:{...state.target},cuts:{...state.cuts},nodes:state.nodes.map(n=>({x:n.x,y:n.y,z:n.z,phase:n.phase,power:n.power/1000}))},
   study:{axis:$("studyAxis").value,coord:Number($("studyCoord").value),active:state.studyPlane.active,scanSpan:state.scanSpan,aimMode:$("scanAimMode").value},
   display:{mode:state.mode,t:state.t,speed:state.speed,scaleFactor:{...state.scaleFactor},manualScale:{...state.manualScale}}
  };
@@ -272,10 +272,13 @@ async function importConfig(file){
   const root=JSON.parse(await file.text()),p=root.parameters||root;
   if(!p||!Array.isArray(p.nodes)||p.nodes.length<1||p.nodes.length>64)throw Error("配置必须包含 1–64 个节点。");
   const num=(v,d,lo,hi,label)=>validNumber(v,d,lo,hi,label);
+  // New configs store node power in kW; legacy configs without powerUnit use W.
+  const powerScale=p.powerUnit==="kW"?1000:1;
+  if(p.powerUnit!==undefined&&p.powerUnit!=="kW"&&p.powerUnit!=="W")throw Error("配置中的功率单位不受支持。");
   const nodeList=p.nodes.map((n,i)=>({
    x:num(n.x,0,-1e7,1e7,"节点"+(i+1)+" X"),y:num(n.y,0,-1e7,1e7,"节点"+(i+1)+" Y"),
    z:num(n.z,0,-1e7,1e7,"节点"+(i+1)+" Z"),phase:num(n.phase,0,-1e12,1e12,"节点"+(i+1)+" 相位"),
-   power:num(n.power,1,0,Number.MAX_VALUE,"节点"+(i+1)+" 功率")
+   power:num(n.power,powerScale===1000?0.001:1,0,Number.MAX_VALUE/powerScale,"节点"+(i+1)+" 功率")*powerScale
   }));
   const target={x:num(p.target?.x,state.target.x,-1e7,1e7,"目标 X"),y:num(p.target?.y,state.target.y,-1e7,1e7,"目标 Y"),z:num(p.target?.z,state.target.z,-1e7,1e7,"目标 Z")};
   const cuts={x:num(p.cuts?.x,target.x,-1e7,1e7,"X 截面"),y:num(p.cuts?.y,target.y,-1e7,1e7,"Y 截面"),z:num(p.cuts?.z,target.z,-1e7,1e7,"Z 截面")};
