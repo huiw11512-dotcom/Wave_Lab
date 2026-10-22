@@ -91,6 +91,14 @@ function peakTotalFieldComponents(a){
 }
 function maxTotalFieldOverCycle(a){return peakTotalFieldComponents(a).E;}
 function maxPowerFluxOverCycle(a,samples=4096){
+ // Dense sampling of the magnitude of the Poynting vector over one full period.
+ let Smax=0;
+ for(let i=0;i<samples;i++){
+  const value=F.instantaneous(a,i/samples).S;
+  if(value>Smax)Smax=value;
+ }
+ return Smax;
+}
 let targetCycleCache={key:"",Emax:NaN,Smax:NaN};
 function updateTargetCycleMaximum(prm){
  const key=JSON.stringify({freq:prm.freq,apX:prm.apX,apY:prm.apY,eta:prm.eta,target:prm.target,nodes:prm.nodes});
