@@ -1169,10 +1169,28 @@ function cameraBasis(x,y,z){
  const rx=cy*x-sy*y,ry=sy*x+cy*y;
  return {x:rx,y:Math.sin(camera.pitch)*ry-Math.cos(camera.pitch)*z};
 }
+let sceneProjection={cx:0,cy:0,scale:1,axisLen:1};
+function setupSceneProjection(x0,x1,y0,y1,z0,z1){
+ const points=[
+  {x:0,y:0,z:0},...state.nodes.map(n=>({x:n.x,y:n.y,z:n.z})),{x:state.target.x,y:state.target.y,z:state.target.z},
+  ...[x0,x1].flatMap(x=>[y0,y1].flatMap(y=>[z0,z1].map(z=>({x,y,z}))))
+ ];
+ const maxAbs=Math.max(1,...points.flatMap(p=>[Math.abs(p.x),Math.abs(p.y),Math.abs(p.z)]));
+ const axisLen=maxAbs*1.22;
+ const axisEnds=[
+  {x:-axisLen,y:0,z:0},{x:axisLen,y:0,z:0},
+  {x:0,y:-axisLen,z:0},{x:0,y:axisLen,z:0},
+  {x:0,y:0,z:-axisLen},{x:0,y:0,z:axisLen}
+ ];
+ const projected=points.concat(axisEnds).map(p=>cameraBasis(p.x,p.y,p.z));
+ const minX=Math.min(...projected.map(p=>p.x)),maxX=Math.max(...projected.map(p=>p.x));
+ const minY=Math.min(...projected.map(p=>p.y)),maxY=Math.max(...projected.map(p=>p.y));
+ const fit=Math.min(570/Math.max(1e-9,maxX-minX),218/Math.max(1e-9,maxY-minY));
+ sceneProjection={cx:(minX+maxX)/2,cy:(minY+maxY)/2,scale:fit*camera.zoom,axisLen};
+}
 function iso(p){
- const nx=(p.x-state.centerX)/state.Lx,ny=(p.y-state.centerY)/state.Ly,nz=(p.z-state.zMin)/state.Lz-.5;
- const v=cameraBasis(nx,ny,nz),s=170*camera.zoom;
- return {x:325+s*v.x,y:138+s*v.y};
+ const v=cameraBasis(p.x,p.y,p.z),q=sceneProjection;
+ return {x:325+(v.x-q.cx)*q.scale,y:137+(v.y-q.cy)*q.scale};
 }
 function svgPath(arr){return arr.map((p,i)=>(i?"L":"M")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ")+"Z";}
 function axisGizmo(){
@@ -1191,11 +1209,22 @@ function axisGizmo(){
 function renderScene(){
  const svg=$("scene3d");if(!svg)return;
  const z0=state.zMin,z1=z0+state.Lz,x0=state.centerX-state.Lx/2,x1=state.centerX+state.Lx/2,y0=state.centerY-state.Ly/2,y1=state.centerY+state.Ly/2;
- const pts=[];for(const x of [x0,x1])for(const y of [y0,y1])for(const z of [z0,z1])pts.push({x,y,z});
- let html='<g fill="none" stroke="#bacdd8" stroke-width="1.5">';
- for(let a=0;a<pts.length;a++)for(let b=a+1;b<pts.length;b++){
-  const p=pts[a],q=pts[b],changes=["x","y","z"].filter(k=>p[k]!==q[k]).length;
-  if(changes===1){const u=iso(p),v=iso(q);html+='<path d="M'+u.x+','+u.y+'L'+v.x+','+v.y+'"/>';}
+ // Fit nodes, target and current field-domain planes together so a local field window cannot hide distant nodes.
+ setupSceneProjection(x0,x1,y0,y1,z0,z1);
+ const axisLen=sceneProjection.axisLen;
+ const axes=[
+  {name:"X",color:"#cf5555",neg:{x:-axisLen,y:0,z:0},pos:{x:axisLen,y:0,z:0},before:{x:axisLen*.91,y:0,z:0}},
+  {name:"Y",color:"#299d80",neg:{x:0,y:-axisLen,z:0},pos:{x:0,y:axisLen,z:0},before:{x:0,y:axisLen*.91,z:0}},
+  {name:"Z",color:"#397cda",neg:{x:0,y:0,z:-axisLen},pos:{x:0,y:0,z:axisLen},before:{x:0,y:0,z:axisLen*.91}}
+ ];
+ let html='<g fill="none" stroke-width="1.35" stroke-linecap="round">';
+ for(const a of axes){
+  const p=iso(a.neg),q=iso(a.pos),tip=iso(a.pos),prev=iso(a.before);
+  html+='<path d="M'+p.x.toFixed(1)+','+p.y.toFixed(1)+'L'+q.x.toFixed(1)+','+q.y.toFixed(1)+'" stroke="'+a.color+'" opacity=".68"/>';
+  const dx=tip.x-prev.x,dy=tip.y-prev.y,len=Math.hypot(dx,dy)||1,bx=tip.x-dx/len*9,by=tip.y-dy/len*9,px=-dy/len*4,py=dx/len*4;
+  html+='<path d="M'+tip.x.toFixed(1)+','+tip.y.toFixed(1)+'L'+(bx+px).toFixed(1)+','+(by+py).toFixed(1)+'L'+(bx-px).toFixed(1)+','+(by-py).toFixed(1)+'Z" fill="'+a.color+'" stroke="'+a.color+'"/>';
+  const label=iso(a.before);
+  html+='<text x="'+(label.x+dx/len*7).toFixed(1)+'" y="'+(label.y+dy/len*7-5).toFixed(1)+'" fill="'+a.color+'" stroke="none" font-size="13" font-weight="750" text-anchor="middle">'+a.name+'</text>';
  }
  html+='</g>';
  const planeCorners={
