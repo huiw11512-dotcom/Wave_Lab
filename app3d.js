@@ -6,10 +6,10 @@ const state={
  freq:10,apX:5,apY:5,eta:.7,n:1000,pointsPerWave:8,centerX:0,centerY:0,savedOverview:null,Lx:50,Ly:50,Lz:60,zMin:-30,
  target:{x:0,y:10,z:20},cuts:{x:0,y:10,z:20},
  nodes:[{x:0,y:25,z:25,phase:-63,power:1000000},{x:0,y:25,z:-25,phase:-38,power:1000000},{x:0,y:-25,z:25,phase:-110,power:1000000},{x:0,y:-25,z:-25,phase:-3,power:1000000}],
- t:0,playing:false,speed:.5,mode:"E",data:null,rasters:{},scaleFactor:{E:1,S:1},manualScale:{E:null,S:null},tracePol:0,
+ t:0,playing:false,speed:.5,mode:"E",thresholdEnabled:false,thresholds:{E:1000,S:1},data:null,rasters:{},scaleFactor:{E:1,S:1},manualScale:{E:null,S:null},tracePol:0,
  studyPlane:{axis:"x",coord:0,active:false},scanSpan:5,scanAimMode:"track",scanResult:null,coherenceRatio:null
 };
-let worker=null,job=0,timer=null,lastTime=0,lastPaint=0,hover=null,rendering=false,maxPointData=null;
+let worker=null,job=0,timer=null,lastTime=0,lastPaint=0,hover=null,rendering=false,maxPointData=null,thresholdCloudCache={key:"",points:[]};
 const fmt=(v,d=2)=>Number(v).toFixed(d);
 const sci=v=>(Math.abs(v)>=.01&&Math.abs(v)<1000)?Number(v).toFixed(3):Number(v).toExponential(2);
 const escapeHTML=x=>String(x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -311,7 +311,7 @@ async function importConfig(file){
   $("targetX").value=target.x;$("targetY").value=target.y;$("targetZ").value=target.z;
   $("studyAxis").value=axis;$("studyCoord").value=state.studyPlane.coord;$("scanSpan").value=state.scanSpan;$("scanAimMode").value=state.scanAimMode;$("count").value=state.nodes.length;
   $("time").value=state.t;$("speed").value=state.speed;
-  $("modeE").classList.toggle("selected",state.mode==="E");$("modeS").classList.toggle("selected",state.mode==="S");
+  $("modeE").classList.toggle("selected",state.mode==="E");$("modeS").classList.toggle("selected",state.mode==="S");syncThresholdControls();
   renderNodes();syncViewInput();drawScanPlot();updateExtras();queue();
  }catch(e){alert("配置导入失败。\n"+(e&&e.message?e.message:String(e)));}
 }
@@ -342,6 +342,9 @@ function bind(){
  $("equalPhase").addEventListener("click",()=>{state.nodes.forEach(n=>n.phase=0);renderNodes();queue();});
  $("randomPhase").addEventListener("click",()=>{state.nodes.forEach(n=>n.phase=Math.round(Math.random()*360-180));renderNodes();queue();});
  $("showMaxPoint").addEventListener("change",()=>recolorOnly());
+ $("thresholdEnabled").addEventListener("change",e=>{state.thresholdEnabled=e.target.checked;syncThresholdControls();thresholdCloudCache.key="";recolorOnly();renderScene();});
+ $("thresholdMode").addEventListener("change",e=>setMode(e.target.value==="S"?"S":"E"));
+ $("thresholdValue").addEventListener("change",e=>{const v=Number(e.target.value);if(e.target.value.trim()===""||!Number.isFinite(v)||v<0){syncThresholdControls();return;}state.thresholds[state.mode]=v;thresholdCloudCache.key="";recolorOnly();renderScene();});
  $("modeE").addEventListener("click",()=>setMode("E"));
  $("modeS").addEventListener("click",()=>setMode("S"));
  $("scaleLimit").addEventListener("input",e=>{
@@ -397,8 +400,15 @@ function bind(){
  window.addEventListener("blur",hideLens);
  window.addEventListener("scroll",hideLens,true);
 }
+function syncThresholdControls(){
+ const select=$("thresholdMode"),input=$("thresholdValue"),unit=$("thresholdUnit"),wrap=$("thresholdControls");
+ if(select)select.value=state.mode;
+ if(input&&document.activeElement!==input)input.value=String(state.thresholds[state.mode]);
+ if(unit)unit.textContent=state.mode==="E"?"V/m":"W/cm²";
+ if(wrap)wrap.classList.toggle("enabled",state.thresholdEnabled);
+}
 function setMode(mode){
- state.mode=mode;$("modeE").classList.toggle("selected",mode==="E");$("modeS").classList.toggle("selected",mode==="S");drawDynamic();drawScanPlot();
+ state.mode=mode;$("modeE").classList.toggle("selected",mode==="E");$("modeS").classList.toggle("selected",mode==="S");syncThresholdControls();drawDynamic();drawScanPlot();renderScene();
 }
 const MAX_GRID=1000;
 function gridLimitForNodes(){return Math.max(128,Math.min(MAX_GRID,Math.floor(MAX_GRID*Math.sqrt(4/state.nodes.length))));}
@@ -505,8 +515,11 @@ function makeValues(axis){
 function rawRaster(vals,scale,n){
  const canvas=document.createElement("canvas");canvas.width=n;canvas.height=n;
  const ctx=canvas.getContext("2d",{alpha:false}),img=ctx.createImageData(n,n),buf=img.data,lut=state.mode==="E"?lutE:lutS;
+ const threshold=state.thresholds[state.mode];
  for(let i=0;i<n*n;i++){
-  const v=Math.max(0,Math.min(255,Math.round(255*vals[i]/scale))),k=i*4,t=v*3;
+  const k=i*4;
+  if(state.thresholdEnabled&&vals[i]>=threshold){buf[k]=0;buf[k+1]=0;buf[k+2]=0;buf[k+3]=255;continue;}
+  const v=Math.max(0,Math.min(255,Math.round(255*vals[i]/scale))),t=v*3;
   buf[k]=lut[t];buf[k+1]=lut[t+1];buf[k+2]=lut[t+2];buf[k+3]=255;
  }
  ctx.putImageData(img,0,0);return canvas;
@@ -628,6 +641,7 @@ function recolorOnly(){
  $("scaleUnit").textContent=state.mode==="E"?"瞬时电场强度 |E(t)| · V/m":"瞬时功率通量 |S(t)| · W/cm²";
  syncColorBar();
  if(hover){const h=hover;hover=null;showLens(h.axis,h.event);}
+ renderScene();
 }
 function drawDynamic(){
  $("time").value=state.t;$("timeValue").textContent=fmt(state.t,3)+" T";
@@ -689,6 +703,20 @@ function axisGizmo(){
  }
  return out+'</g>';
 }
+function thresholdCloud(prm,x0,x1,y0,y1,z0,z1){
+ if(!state.thresholdEnabled)return [];
+ const time=(Math.round(state.t*25)/25)%1,threshold=state.thresholds[state.mode];
+ const key=JSON.stringify({p:prm,mode:state.mode,threshold,time});
+ if(thresholdCloudCache.key===key)return thresholdCloudCache.points;
+ const N=10,points=[];
+ for(let iz=0;iz<N;iz++)for(let iy=0;iy<N;iy++)for(let ix=0;ix<N;ix++){
+  const point={x:x0+(ix+.5)/N*(x1-x0),y:y0+(iy+.5)/N*(y1-y0),z:z0+(iz+.5)/N*(z1-z0)};
+  const instant=F.instantaneous(F.fieldAt(prm,point),time);
+  if((state.mode==="E"?instant.E:instant.S)>=threshold)points.push(point);
+ }
+ thresholdCloudCache={key,points};
+ return points;
+}
 function renderScene(){
  const svg=$("scene3d");if(!svg)return;
  const z0=state.zMin,z1=z0+state.Lz,x0=state.centerX-state.Lx/2,x1=state.centerX+state.Lx/2,y0=state.centerY-state.Ly/2,y1=state.centerY+state.Ly/2;
@@ -720,6 +748,12 @@ function renderScene(){
   const lo=ax==="z"?z0:ax==="x"?x0:y0,hi=ax==="z"?z1:ax==="x"?x1:y1;
   if(state.target[ax]<lo||state.target[ax]>hi)continue;
   html+='<path d="'+svgPath(planeCorners[ax].map(iso))+'" fill="'+planeColors[ax]+'" fill-opacity=".14" stroke="'+planeColors[ax]+'" stroke-width="1.7"/>';
+ }
+ if(state.thresholdEnabled){
+  const cloud=thresholdCloud(params(),x0,x1,y0,y1,z0,z1);
+  html+='<g class="threshold-cloud" fill="#050505" fill-opacity=".88" stroke="#fff" stroke-opacity=".24" stroke-width=".35" aria-label="达到阈值的三维区域">';
+  for(const point of cloud){const q=iso(point);html+='<circle cx="'+q.x.toFixed(2)+'" cy="'+q.y.toFixed(2)+'" r="2.35"/>';}
+  html+='</g>';
  }
  const T=iso(state.target);
  state.nodes.forEach((node,i)=>{
@@ -871,5 +905,5 @@ function exportCSV(){
  }
  download(new Blob(["\ufeff",lines.join("\n")],{type:"text/csv;charset=utf-8"}),"WaveLab_3D_all_orthogonal_slices.csv");
 }
-bind();renderNodes();updateExtras();drawTrace();initSceneControls();queue();requestAnimationFrame(tick);
+bind();renderNodes();syncThresholdControls();updateExtras();drawTrace();initSceneControls();queue();requestAnimationFrame(tick);
 })();
