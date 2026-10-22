@@ -562,14 +562,14 @@ function renderNodes(){
   const hdr=document.createElement("div");hdr.className="node-head";
   hdr.innerHTML='<i class="dot" style="background:'+colors[i%colors.length]+'"></i>节点 '+(i+1);e.appendChild(hdr);
   const cells=document.createElement("div");cells.className="node-fields";
-  [["x","X / m"],["y","Y / m"],["z","Z / m"],["phase","相位 / °"],["power","功率 / W"]].forEach(pair=>{
+  [["x","X / m"],["y","Y / m"],["z","Z / m"],["phase","相位 / °"],["power","功率 / kW"]].forEach(pair=>{
    const d=document.createElement("div"),label=document.createElement("label"),input=document.createElement("input");
-   const key=pair[0];label.textContent=pair[1];input.type="number";input.step="any";input.value=nd[key];input.min=key==="power"?"0":"";
+   const key=pair[0];label.textContent=pair[1];input.type="number";input.step="any";input.value=key==="power"?nd.power/1000:nd[key];input.min=key==="power"?"0":"";
    input.setAttribute("aria-label","节点"+(i+1)+" "+pair[1]);
    input.addEventListener("change",()=>{
     const num=Number(input.value);
-    if(!Number.isFinite(num)||input.value.trim()===""||(key==="power"&&num<0)){input.value=nd[key];return;}
-    nd[key]=num;input.value=String(num);queue();
+    if(!Number.isFinite(num)||input.value.trim()===""||(key==="power"&&num<0)){input.value=key==="power"?nd.power/1000:nd[key];return;}
+    nd[key]=key==="power"?num*1000:num;input.value=String(num);queue();
    });
    d.appendChild(label);d.appendChild(input);cells.appendChild(d);
   });
