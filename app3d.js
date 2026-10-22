@@ -79,27 +79,25 @@ function updateStudyPlaneTitle(){
  $("planeRangeLabel").textContent="当前"+names[axis]+"截面 "+(state.mode==="E"?"电场最小 / 最大":"功率通量最小 / 最大");
  $("scanFieldTitle").textContent=state.mode==="E"?"目标穿面瞬时电场 |E(t)|":"目标穿面瞬时功率通量 |S(t)|";
 }
-function maxTotalFieldOverCycle(a){
- // E(t)=Er*cos(ωt)+Ei*sin(ωt). The maximum of |E(t)|² is the largest eigenvalue
- // of the 2×2 Gram matrix of Er and Ei, giving an exact cycle maximum without time sampling.
+function peakTotalFieldComponents(a){
+ // Find the carrier phase that maximizes the 3-D vector norm, then expose
+ // Ex/Ey/Ez at that same instant for direct RSS verification.
  const A=a.erx*a.erx+a.ery*a.ery+a.erz*a.erz;
  const B=a.erx*a.eix+a.ery*a.eiy+a.erz*a.eiz;
  const C=a.eix*a.eix+a.eiy*a.eiy+a.eiz*a.eiz;
- return Math.sqrt(Math.max(0,.5*(A+C+Math.hypot(A-C,2*B))));
+ const theta=.5*Math.atan2(2*B,A-C),co=Math.cos(theta),si=Math.sin(theta);
+ const ex=a.erx*co+a.eix*si,ey=a.ery*co+a.eiy*si,ez=a.erz*co+a.eiz*si;
+ return {E:Math.hypot(ex,ey,ez),ex,ey,ez,t:((theta/(2*Math.PI))%1+1)%1};
 }
+function maxTotalFieldOverCycle(a){return peakTotalFieldComponents(a).E;}
 function maxPowerFluxOverCycle(a,samples=4096){
- // Dense sampling of |S(t)| over one normalized carrier period [0,1).
- let Smax=0;
- for(let i=0;i<samples;i++){const value=F.instantaneous(a,i/samples).S;if(value>Smax)Smax=value;}
- return Smax;
-}
 let targetCycleCache={key:"",Emax:NaN,Smax:NaN};
 function updateTargetCycleMaximum(prm){
  const key=JSON.stringify({freq:prm.freq,apX:prm.apX,apY:prm.apY,eta:prm.eta,target:prm.target,nodes:prm.nodes});
  if(targetCycleCache.key===key)return targetCycleCache;
  const phasor=F.fieldAt(prm,prm.target);
- const Emax=maxTotalFieldOverCycle(phasor),Smax=maxPowerFluxOverCycle(phasor);
- targetCycleCache={key,Emax,Smax};
+ const peak=peakTotalFieldComponents(phasor),Emax=peak.E,Smax=maxPowerFluxOverCycle(phasor);
+ targetCycleCache={key,Emax,Smax,peak};
  return targetCycleCache;
 }
 function updateStudyReadouts(){
@@ -108,7 +106,7 @@ function updateStudyReadouts(){
  const cycle=updateTargetCycleMaximum(prm);
  $("targetEStat").textContent=sci(inst.E);
  $("targetEMaxStat").textContent=sci(cycle.Emax);
- const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax");if(targetMaxEl)targetMaxEl.textContent="|E|max："+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="|S|max："+sci(cycle.Smax)+" W/cm²";
+ const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax");if(targetMaxEl)targetMaxEl.textContent="|E|max："+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="|S|max："+sci(cycle.Smax)+" W/cm²";const targetCompEl=$("targetEcomponents");if(targetCompEl)targetCompEl.textContent="Ex="+sci(cycle.peak.ex)+" · Ey="+sci(cycle.peak.ey)+" · Ez="+sci(cycle.peak.ez)+" V/m";
  $("targetSStat").textContent=sci(inst.S);
  $("targetSMaxStat").textContent=sci(cycle.Smax);
  updateStudyPlaneTitle();
@@ -722,7 +720,7 @@ function plotUV(canvas,e){
  if(u<0||u>1||v<0||v>1)return null;
  return {u,v};
 }
-function hideLens(){hover=null;const e=$("hoverTotalEmax"),s=$("hoverTotalSmax");if(e)e.textContent="|E|max：悬停查看";if(s)s.textContent="|S|max：悬停查看";$("lens").classList.remove("show");$("lens").setAttribute("aria-hidden","true");}
+function hideLens(){hover=null;const e=$("hoverTotalEmax"),s=$("hoverTotalSmax"),c=$("hoverEcomponents");if(e)e.textContent="|E|max：悬停查看";if(s)s.textContent="|S|max：悬停查看";if(c)c.textContent="Ex：— · Ey：— · Ez：—";$("lens").classList.remove("show");$("lens").setAttribute("aria-hidden","true");}
 function showLens(axis,e){
  if(!state.rasters[axis])return;
  const rawUV=plotUV($("plot"+axis.toUpperCase()),e);
@@ -738,17 +736,19 @@ function showLens(axis,e){
  const cx=(uv.u*n-ix)/sw*444,cy=(uv.v*n-iy)/sw*444;g.strokeStyle="#fff";g.lineWidth=3;g.strokeRect(cx-11,cy-11,22,22);
  const xyz=snapToTarget?{...prm.target}:F.planePoint(prm,axis,uv.u,uv.v);
  $("lensCoord").textContent=F.AXES.map(k=>k+"="+fmt(xyz[k],2)).join("  ")+" m";
- const field=F.fieldAt(prm,xyz),direct=F.instantaneous(field,state.t);
+ const field=F.fieldAt(prm,xyz),direct=F.instantaneous(field,state.t),peak=peakTotalFieldComponents(field);
  const unit=state.mode==="E"?" V/m":" W/cm²",current=state.mode==="E"?direct.E:direct.S;
- const eMax=maxTotalFieldOverCycle(field),sMax=maxPowerFluxOverCycle(field);
- const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax");
- if(hoverE)hoverE.textContent="|E|max："+sci(eMax)+" V/m";
+ const sMax=maxPowerFluxOverCycle(field);
+ const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax"),hoverC=$("hoverEcomponents");
+ if(hoverE)hoverE.textContent="|E|max："+sci(peak.E)+" V/m";
  if(hoverS)hoverS.textContent="|S|max："+sci(sMax)+" W/cm²";
- const cycleMax=state.mode==="E"?eMax:sMax;
+ if(hoverC)hoverC.textContent="Ex="+sci(peak.ex)+" · Ey="+sci(peak.ey)+" · Ez="+sci(peak.ez)+" V/m";
+ const cycleMax=state.mode==="E"?peak.E:sMax;
  $("lensReading").textContent="瞬时值："+sci(current)+unit;
  $("lensMaxReading").textContent=(state.mode==="E"?"周期最大 |E|：":"周期最大 |S|：")+sci(cycleMax)+unit;
+ $("lensComponents").textContent="峰值分量：Ex="+sci(peak.ex)+"，Ey="+sci(peak.ey)+"，Ez="+sci(peak.ez)+" V/m；平方和开根号="+sci(peak.E)+" V/m";
  const div=$("lens");div.classList.add("show");div.setAttribute("aria-hidden","false");
- const W=270,H=392;let left=e.clientX+17,top=e.clientY+15;
+ const W=270,H=445;let left=e.clientX+17,top=e.clientY+15;
  if(left+W>window.innerWidth-5)left=e.clientX-W-17;
  if(top+H>window.innerHeight-5)top=e.clientY-H-17;
  div.style.left=Math.max(5,left)+"px";div.style.top=Math.max(5,top)+"px";
