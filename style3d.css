@@ -175,3 +175,8 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
 .max-toggle input{width:17px;height:17px;margin:0;accent-color:#cf193e}
 @media(max-width:900px){.field-max-readout{order:1;flex:1 0 100%;margin:0}.fig-tools{order:2;width:100%;justify-content:space-between}}
 @media(max-width:600px){.fig-tools{align-items:flex-start}.max-toggle{font-size:13px}.field-max-row{align-items:flex-start;flex-direction:column;gap:3px;white-space:normal}.field-max-row strong{justify-content:flex-start;flex-wrap:wrap}}
+
+/* Show Ex/Ey/Ez at the phase of the 3-D vector peak for direct RSS verification. */
+.field-component-row strong{display:block;text-align:right;font-size:10px;line-height:1.35;white-space:normal;font-weight:650}
+.lens-components{margin-top:7px;padding-top:7px;border-top:1px solid #dce6ec;color:#087e91;font-size:11px;line-height:1.45;font-weight:650;overflow-wrap:anywhere}
+@media(max-width:600px){.field-component-row strong{text-align:left}}
