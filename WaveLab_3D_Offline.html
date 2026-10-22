@@ -194,7 +194,7 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
    <div class="timeline"><label for="time">周期时刻 <span id="timeValue" class="value">0.000 T</span></label><input type="range" id="time" min="0" max="1" step=".001" value="0"></div>
    <div class="speed"><label for="speed">播放速度</label><select id="speed"><option value=".25">慢</option><option value=".5" selected>中</option><option value="1">快</option></select></div>
  </div>
- <section class="figure card"><div class="fig-head"><h2>空间场分布</h2><div class="field-max-readout" aria-live="polite" aria-label="悬浮点与目标点的周期峰值及电场矢量分量"><div class="field-max-row"><span>悬浮点周期峰值</span><strong><span id="hoverTotalEmax">|E|max：悬停查看</span><span id="hoverTotalSmax">|S|max：悬停查看</span></strong></div><div class="field-max-row field-component-row"><span>悬浮点峰值分量</span><strong id="hoverEcomponents">Ex：— · Ey：— · Ez：—</strong></div><div class="field-max-row"><span>目标点周期峰值</span><strong><span id="targetTotalEmax">|E|max：—</span><span id="targetTotalSmax">|S|max：—</span></strong></div><div class="field-max-row field-component-row"><span>目标点峰值分量</span><strong id="targetEcomponents">Ex：— · Ey：— · Ez：—</strong></div></div><div class="fig-tools">
+ <section class="figure card"><div class="fig-head"><h2>空间场分布</h2><div class="field-max-readout" aria-live="polite" aria-label="悬浮点与目标点的周期峰值"><div class="field-max-row"><span>悬浮点周期峰值</span><strong><span id="hoverTotalEmax">|E|max：悬停查看</span><span id="hoverTotalSmax" style="display:none">|S|max：悬停查看</span></strong></div><div class="field-max-row"><span>目标点周期峰值</span><strong><span id="targetTotalEmax">|E|max：—</span><span id="targetTotalSmax" style="display:none">|S|max：—</span></strong></div></div><div class="fig-tools">
     <label class="max-toggle" for="showMaxPoint"><input id="showMaxPoint" type="checkbox" checked>显示最大值点</label>
     <div class="mode"><button id="modeE" class="selected">瞬时电场 |E|</button><button id="modeS">瞬时功率通量 |S|</button></div>
   </div></div>
@@ -639,13 +639,21 @@ function updateTargetCycleMaximum(prm){
  targetCycleCache={key,Emax,Smax,peak};
  return targetCycleCache;
 }
+function syncCycleReadoutMode(){
+ const isE=state.mode==="E";
+ const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax"),targetE=$("targetTotalEmax"),targetS=$("targetTotalSmax");
+ if(hoverE)hoverE.style.display=isE?"":"none";
+ if(hoverS)hoverS.style.display=isE?"none":"";
+ if(targetE)targetE.style.display=isE?"":"none";
+ if(targetS)targetS.style.display=isE?"none":"";
+}
 function updateStudyReadouts(){
  if(!state.data)return;
  const prm=params(),phasor=F.fieldAt(prm,state.target),inst=F.instantaneous(phasor,state.t);
  const cycle=updateTargetCycleMaximum(prm);
  $("targetEStat").textContent=sci(inst.E);
  $("targetEMaxStat").textContent=sci(cycle.Emax);
- $("targetTotalEmax").textContent="|E|max："+sci(cycle.Emax)+" V/m";$("targetTotalSmax").textContent="|S|max："+sci(cycle.Smax)+" W/cm²";$("targetEcomponents").textContent="Ex="+sci(cycle.peak.ex)+" · Ey="+sci(cycle.peak.ey)+" · Ez="+sci(cycle.peak.ez)+" V/m";
+ $("targetTotalEmax").textContent="|E|max："+sci(cycle.Emax)+" V/m";$("targetTotalSmax").textContent="|S|max："+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
  $("targetSStat").textContent=sci(inst.S);
  $("targetSMaxStat").textContent=sci(cycle.Smax);
  updateStudyPlaneTitle();
@@ -1288,7 +1296,7 @@ function plotUV(canvas,e){
  if(u<0||u>1||v<0||v>1)return null;
  return {u,v};
 }
-function hideLens(){hover=null;const e=$("hoverTotalEmax"),s=$("hoverTotalSmax"),c=$("hoverEcomponents");if(e)e.textContent="|E|max：悬停查看";if(s)s.textContent="|S|max：悬停查看";if(c)c.textContent="Ex：— · Ey：— · Ez：—";$("lens").classList.remove("show");$("lens").setAttribute("aria-hidden","true");}
+function hideLens(){hover=null;const e=$("hoverTotalEmax"),s=$("hoverTotalSmax");if(e)e.textContent="|E|max：悬停查看";if(s)s.textContent="|S|max：悬停查看";$("lens").classList.remove("show");$("lens").setAttribute("aria-hidden","true");}
 function showLens(axis,e){
  if(!state.rasters[axis])return;
  const rawUV=plotUV($("plot"+axis.toUpperCase()),e);
@@ -1307,10 +1315,10 @@ function showLens(axis,e){
  const field=F.fieldAt(prm,xyz),direct=F.instantaneous(field,state.t),peak=peakTotalFieldComponents(field);
  const unit=state.mode==="E"?" V/m":" W/cm²",current=state.mode==="E"?direct.E:direct.S;
  const sMax=maxPowerFluxOverCycle(field);
- const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax"),hoverC=$("hoverEcomponents");
+ const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax");
  if(hoverE)hoverE.textContent="|E|max："+sci(peak.E)+" V/m";
  if(hoverS)hoverS.textContent="|S|max："+sci(sMax)+" W/cm²";
- if(hoverC)hoverC.textContent="Ex="+sci(peak.ex)+" · Ey="+sci(peak.ey)+" · Ez="+sci(peak.ez)+" V/m";
+ syncCycleReadoutMode();
  const cycleMax=state.mode==="E"?peak.E:sMax;
  $("lensReading").textContent="瞬时值："+sci(current)+unit;
  $("lensMaxReading").textContent=(state.mode==="E"?"周期最大 |E|：":"周期最大 |S|：")+sci(cycleMax)+unit;
