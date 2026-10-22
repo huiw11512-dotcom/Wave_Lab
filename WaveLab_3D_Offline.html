@@ -145,6 +145,22 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
 .field-component-row strong{display:block;text-align:right;font-size:10px;line-height:1.35;white-space:normal;font-weight:650}
 .lens-components{margin-top:7px;padding-top:7px;border-top:1px solid #dce6ec;color:#087e91;font-size:11px;line-height:1.45;font-weight:650;overflow-wrap:anywhere}
 @media(max-width:600px){.field-component-row strong{text-align:left}}
+
+/* Threshold region controls */
+.threshold-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;padding:12px 14px;border:1px solid #d8e5eb;border-radius:12px;background:#f8fbfc;color:#234456;font-size:13px}
+.threshold-enable{display:flex;align-items:center;gap:7px;font-weight:750;white-space:nowrap}
+.threshold-enable input{width:17px;height:17px;margin:0;accent-color:#087e91}
+.threshold-field{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.threshold-field label{font-weight:650;color:#587283}
+.threshold-field select,.threshold-field input{height:34px;border:1px solid #cbdde5;border-radius:8px;background:#fff;color:#17394d;padding:0 9px;font:inherit}
+.threshold-field select{min-width:140px}
+.threshold-value-field input{width:130px;font-variant-numeric:tabular-nums}
+#thresholdUnit{font-size:12px;color:#087e91;min-width:42px}
+.threshold-note{color:#6d8492;font-size:12px}
+.threshold-controls.enabled{border-color:#111;background:#f5f5f5}
+.threshold-controls.enabled .threshold-note{color:#303030}
+@media(max-width:700px){.threshold-controls{align-items:flex-start;gap:10px}.threshold-note{flex-basis:100%}}
+
 </style></head>
 <body><div class="app">
 <aside class="sidebar">
@@ -216,6 +232,14 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
       </div>
       <button type="button" id="scaleAuto" title="恢复自动色标">自动</button>
     </div>
+  </div>
+
+  <div id="thresholdControls" class="threshold-controls" aria-label="阈值区域可视化">
+   <label class="threshold-enable" for="thresholdEnabled"><input id="thresholdEnabled" type="checkbox">启用阈值区域</label>
+   <div class="threshold-field"><label for="thresholdMode">阈值物理量</label><select id="thresholdMode"><option value="E">电场强度 |E|</option><option value="S">功率密度 |S|</option></select></div>
+   <div class="threshold-field threshold-value-field"><label for="thresholdValue">阈值（≥）</label><input id="thresholdValue" type="number" min="0" step="any" value="1000"></div>
+   <strong id="thresholdUnit">V/m</strong>
+   <span class="threshold-note">超阈值区域在切面与三维预览中显示为黑色</span>
   </div>
 
  </section>
@@ -537,10 +561,10 @@ const state={
  freq:10,apX:5,apY:5,eta:.7,n:1000,pointsPerWave:8,centerX:0,centerY:0,savedOverview:null,Lx:50,Ly:50,Lz:60,zMin:-30,
  target:{x:0,y:10,z:20},cuts:{x:0,y:10,z:20},
  nodes:[{x:0,y:25,z:25,phase:-63,power:1000000},{x:0,y:25,z:-25,phase:-38,power:1000000},{x:0,y:-25,z:25,phase:-110,power:1000000},{x:0,y:-25,z:-25,phase:-3,power:1000000}],
- t:0,playing:false,speed:.5,mode:"E",data:null,rasters:{},scaleFactor:{E:1,S:1},manualScale:{E:null,S:null},tracePol:0,
+ t:0,playing:false,speed:.5,mode:"E",thresholdEnabled:false,thresholds:{E:1000,S:1},data:null,rasters:{},scaleFactor:{E:1,S:1},manualScale:{E:null,S:null},tracePol:0,
  studyPlane:{axis:"x",coord:0,active:false},scanSpan:5,scanAimMode:"track",scanResult:null,coherenceRatio:null
 };
-let worker=null,job=0,timer=null,lastTime=0,lastPaint=0,hover=null,rendering=false,maxPointData=null;
+let worker=null,job=0,timer=null,lastTime=0,lastPaint=0,hover=null,rendering=false,maxPointData=null,thresholdCloudCache={key:"",points:[]};
 const fmt=(v,d=2)=>Number(v).toFixed(d);
 const sci=v=>(Math.abs(v)>=.01&&Math.abs(v)<1000)?Number(v).toFixed(3):Number(v).toExponential(2);
 const escapeHTML=x=>String(x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -842,7 +866,7 @@ async function importConfig(file){
   $("targetX").value=target.x;$("targetY").value=target.y;$("targetZ").value=target.z;
   $("studyAxis").value=axis;$("studyCoord").value=state.studyPlane.coord;$("scanSpan").value=state.scanSpan;$("scanAimMode").value=state.scanAimMode;$("count").value=state.nodes.length;
   $("time").value=state.t;$("speed").value=state.speed;
-  $("modeE").classList.toggle("selected",state.mode==="E");$("modeS").classList.toggle("selected",state.mode==="S");
+  $("modeE").classList.toggle("selected",state.mode==="E");$("modeS").classList.toggle("selected",state.mode==="S");syncThresholdControls();
   renderNodes();syncViewInput();drawScanPlot();updateExtras();queue();
  }catch(e){alert("配置导入失败。\n"+(e&&e.message?e.message:String(e)));}
 }
@@ -873,6 +897,9 @@ function bind(){
  $("equalPhase").addEventListener("click",()=>{state.nodes.forEach(n=>n.phase=0);renderNodes();queue();});
  $("randomPhase").addEventListener("click",()=>{state.nodes.forEach(n=>n.phase=Math.round(Math.random()*360-180));renderNodes();queue();});
  $("showMaxPoint").addEventListener("change",()=>recolorOnly());
+ $("thresholdEnabled").addEventListener("change",e=>{state.thresholdEnabled=e.target.checked;syncThresholdControls();thresholdCloudCache.key="";recolorOnly();renderScene();});
+ $("thresholdMode").addEventListener("change",e=>setMode(e.target.value==="S"?"S":"E"));
+ $("thresholdValue").addEventListener("change",e=>{const v=Number(e.target.value);if(e.target.value.trim()===""||!Number.isFinite(v)||v<0){syncThresholdControls();return;}state.thresholds[state.mode]=v;thresholdCloudCache.key="";recolorOnly();renderScene();});
  $("modeE").addEventListener("click",()=>setMode("E"));
  $("modeS").addEventListener("click",()=>setMode("S"));
  $("scaleLimit").addEventListener("input",e=>{
@@ -926,8 +953,15 @@ function bind(){
  window.addEventListener("blur",hideLens);
  window.addEventListener("scroll",hideLens,true);
 }
+function syncThresholdControls(){
+ const select=$("thresholdMode"),input=$("thresholdValue"),unit=$("thresholdUnit"),wrap=$("thresholdControls");
+ if(select)select.value=state.mode;
+ if(input&&document.activeElement!==input)input.value=String(state.thresholds[state.mode]);
+ if(unit)unit.textContent=state.mode==="E"?"V/m":"W/cm²";
+ if(wrap)wrap.classList.toggle("enabled",state.thresholdEnabled);
+}
 function setMode(mode){
- state.mode=mode;$("modeE").classList.toggle("selected",mode==="E");$("modeS").classList.toggle("selected",mode==="S");drawDynamic();drawScanPlot();
+ state.mode=mode;$("modeE").classList.toggle("selected",mode==="E");$("modeS").classList.toggle("selected",mode==="S");syncThresholdControls();drawDynamic();drawScanPlot();renderScene();
 }
 const MAX_GRID=1000;
 function gridLimitForNodes(){return Math.max(128,Math.min(MAX_GRID,Math.floor(MAX_GRID*Math.sqrt(4/state.nodes.length))));}
@@ -1034,8 +1068,11 @@ function makeValues(axis){
 function rawRaster(vals,scale,n){
  const canvas=document.createElement("canvas");canvas.width=n;canvas.height=n;
  const ctx=canvas.getContext("2d",{alpha:false}),img=ctx.createImageData(n,n),buf=img.data,lut=state.mode==="E"?lutE:lutS;
+ const threshold=state.thresholds[state.mode];
  for(let i=0;i<n*n;i++){
-  const v=Math.max(0,Math.min(255,Math.round(255*vals[i]/scale))),k=i*4,t=v*3;
+  const k=i*4;
+  if(state.thresholdEnabled&&vals[i]>=threshold){buf[k]=0;buf[k+1]=0;buf[k+2]=0;buf[k+3]=255;continue;}
+  const v=Math.max(0,Math.min(255,Math.round(255*vals[i]/scale))),t=v*3;
   buf[k]=lut[t];buf[k+1]=lut[t+1];buf[k+2]=lut[t+2];buf[k+3]=255;
  }
  ctx.putImageData(img,0,0);return canvas;
@@ -1156,6 +1193,7 @@ function recolorOnly(){
  $("scaleUnit").textContent=state.mode==="E"?"瞬时电场强度 |E(t)| · V/m":"瞬时功率通量 |S(t)| · W/cm²";
  syncColorBar();
  if(hover){const h=hover;hover=null;showLens(h.axis,h.event);}
+ renderScene();
 }
 function drawDynamic(){
  $("time").value=state.t;$("timeValue").textContent=fmt(state.t,3)+" T";
@@ -1217,6 +1255,20 @@ function axisGizmo(){
  }
  return out+'</g>';
 }
+function thresholdCloud(prm,x0,x1,y0,y1,z0,z1){
+ if(!state.thresholdEnabled)return [];
+ const time=(Math.round(state.t*25)/25)%1,threshold=state.thresholds[state.mode];
+ const key=JSON.stringify({p:prm,mode:state.mode,threshold,time});
+ if(thresholdCloudCache.key===key)return thresholdCloudCache.points;
+ const N=10,points=[];
+ for(let iz=0;iz<N;iz++)for(let iy=0;iy<N;iy++)for(let ix=0;ix<N;ix++){
+  const point={x:x0+(ix+.5)/N*(x1-x0),y:y0+(iy+.5)/N*(y1-y0),z:z0+(iz+.5)/N*(z1-z0)};
+  const instant=F.instantaneous(F.fieldAt(prm,point),time);
+  if((state.mode==="E"?instant.E:instant.S)>=threshold)points.push(point);
+ }
+ thresholdCloudCache={key,points};
+ return points;
+}
 function renderScene(){
  const svg=$("scene3d");if(!svg)return;
  const z0=state.zMin,z1=z0+state.Lz,x0=state.centerX-state.Lx/2,x1=state.centerX+state.Lx/2,y0=state.centerY-state.Ly/2,y1=state.centerY+state.Ly/2;
@@ -1248,6 +1300,12 @@ function renderScene(){
   const lo=ax==="z"?z0:ax==="x"?x0:y0,hi=ax==="z"?z1:ax==="x"?x1:y1;
   if(state.target[ax]<lo||state.target[ax]>hi)continue;
   html+='<path d="'+svgPath(planeCorners[ax].map(iso))+'" fill="'+planeColors[ax]+'" fill-opacity=".14" stroke="'+planeColors[ax]+'" stroke-width="1.7"/>';
+ }
+ if(state.thresholdEnabled){
+  const cloud=thresholdCloud(params(),x0,x1,y0,y1,z0,z1);
+  html+='<g class="threshold-cloud" fill="#050505" fill-opacity=".88" stroke="#fff" stroke-opacity=".24" stroke-width=".35" aria-label="达到阈值的三维区域">';
+  for(const point of cloud){const q=iso(point);html+='<circle cx="'+q.x.toFixed(2)+'" cy="'+q.y.toFixed(2)+'" r="2.35"/>';}
+  html+='</g>';
  }
  const T=iso(state.target);
  state.nodes.forEach((node,i)=>{
@@ -1399,6 +1457,6 @@ function exportCSV(){
  }
  download(new Blob(["\ufeff",lines.join("\n")],{type:"text/csv;charset=utf-8"}),"WaveLab_3D_all_orthogonal_slices.csv");
 }
-bind();renderNodes();updateExtras();drawTrace();initSceneControls();queue();requestAnimationFrame(tick);
+bind();renderNodes();syncThresholdControls();updateExtras();drawTrace();initSceneControls();queue();requestAnimationFrame(tick);
 })();</script>
 </body></html>
