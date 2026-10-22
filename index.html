@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f3f6f8">
-<title>Wave Lab | 三维空间切片</title><link rel="stylesheet" href="./style3d.css?v=20261022-cyclemax4"></head>
+<title>Wave Lab | 三维空间切片</title><link rel="stylesheet" href="./style3d.css?v=20261022-threshold1"></head>
 <body><div class="app">
 <aside class="sidebar">
  <div class="brand"><div class="mark">∿</div><div class="brand-text">Wave Lab</div></div>
@@ -71,6 +71,14 @@
       </div>
       <button type="button" id="scaleAuto" title="恢复自动色标">自动</button>
     </div>
+  </div>
+
+  <div id="thresholdControls" class="threshold-controls" aria-label="阈值区域可视化">
+   <label class="threshold-enable" for="thresholdEnabled"><input id="thresholdEnabled" type="checkbox">启用阈值区域</label>
+   <div class="threshold-field"><label for="thresholdMode">阈值物理量</label><select id="thresholdMode"><option value="E">电场强度 |E|</option><option value="S">功率密度 |S|</option></select></div>
+   <div class="threshold-field threshold-value-field"><label for="thresholdValue">阈值（≥）</label><input id="thresholdValue" type="number" min="0" step="any" value="1000"></div>
+   <strong id="thresholdUnit">V/m</strong>
+   <span class="threshold-note">超阈值区域在切面与三维预览中显示为黑色</span>
   </div>
 
  </section>
