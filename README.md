@@ -1,8 +1,10 @@
 # Wave Lab — 三维正交切片版
 
-**在线入口：** https://huiw11512-dotcom.github.io/Wave_Lab/
+**直接使用（无需部署）：** [WaveLab_3D_Offline.html](./WaveLab_3D_Offline.html)
 
-旧二维版备份：https://huiw11512-dotcom.github.io/Wave_Lab/legacy/
+下载这个单文件 HTML 到本地，用 Chrome 或 Edge 直接打开即可；不需要网站部署、服务器或联网。`index.html` 是由多个源码文件组成的开发版入口。
+
+旧二维版备份：[legacy/index.html](./legacy/index.html)
 
 ## 2026-10-21 更新：统一科研色标与自动波长采样
 
@@ -52,9 +54,9 @@
 - 不含反射、互耦、实际旁瓣、介质和目标散射；不连接RF设备，也不做自动相位优化或硬件跟踪。
 - 穿面扫描的“随目标跟踪”会在每个采样位置重新计算各节点指向；“保持当前朝向”则固定使用扫描开始时当前目标对应的节点朝向。两者是不同的工程假设，应对照使用。
 
-## 发布与验证
+## 本地使用与验证
 
-静态文件通过本仓库的 GitHub Actions 工作流部署到 GitHub Pages。首次启用时，请在 Settings → Pages → Build and deployment → Source 中选择 GitHub Actions。此前的[二维数值验收记录](./validation/)不能自动证明新三维模型在所有条件下具有工程实测精度。
+本项目不要求部署。直接打开上方的 `WaveLab_3D_Offline.html` 即可使用完整离线版本；如需修改源码，使用 `index.html` 并保留同目录的 `app3d.js`、`physics3d.js`、`worker3d.js` 和 `style3d.css`。此前的[二维数值验收记录](./validation/)不能自动证明新三维模型在所有条件下具有工程实测精度。
 
 ## 2026-10-21 · CST式交互色标
 
