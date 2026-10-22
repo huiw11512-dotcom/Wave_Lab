@@ -87,19 +87,18 @@ function maxTotalFieldOverCycle(a){
  const C=a.eix*a.eix+a.eiy*a.eiy+a.eiz*a.eiz;
  return Math.sqrt(Math.max(0,.5*(A+C+Math.hypot(A-C,2*B))));
 }
+function maxPowerFluxOverCycle(a,samples=4096){
+ // Dense sampling of |S(t)| over one normalized carrier period [0,1).
+ let Smax=0;
+ for(let i=0;i<samples;i++){const value=F.instantaneous(a,i/samples).S;if(value>Smax)Smax=value;}
+ return Smax;
+}
 let targetCycleCache={key:"",Emax:NaN,Smax:NaN};
 function updateTargetCycleMaximum(prm){
  const key=JSON.stringify({freq:prm.freq,apX:prm.apX,apY:prm.apY,eta:prm.eta,target:prm.target,nodes:prm.nodes});
  if(targetCycleCache.key===key)return targetCycleCache;
  const phasor=F.fieldAt(prm,prm.target);
- const Emax=maxTotalFieldOverCycle(phasor);
- let Smax=0;
- // Power-flux magnitude is retained as a dense one-cycle sample; Emax is analytic and time-independent.
- const samples=4096;
- for(let i=0;i<samples;i++){
-  const value=F.instantaneous(phasor,i/samples);
-  if(value.S>Smax)Smax=value.S;
- }
+ const Emax=maxTotalFieldOverCycle(phasor),Smax=maxPowerFluxOverCycle(phasor);
  targetCycleCache={key,Emax,Smax};
  return targetCycleCache;
 }
@@ -109,7 +108,7 @@ function updateStudyReadouts(){
  const cycle=updateTargetCycleMaximum(prm);
  $("targetEStat").textContent=sci(inst.E);
  $("targetEMaxStat").textContent=sci(cycle.Emax);
- const targetMaxEl=$("targetTotalEmax");if(targetMaxEl)targetMaxEl.textContent=sci(cycle.Emax)+" V/m";
+ const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax");if(targetMaxEl)targetMaxEl.textContent="|E|max："+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="|S|max："+sci(cycle.Smax)+" W/cm²";
  $("targetSStat").textContent=sci(inst.S);
  $("targetSMaxStat").textContent=sci(cycle.Smax);
  updateStudyPlaneTitle();
@@ -723,34 +722,33 @@ function plotUV(canvas,e){
  if(u<0||u>1||v<0||v>1)return null;
  return {u,v};
 }
-function hideLens(){hover=null;const el=$("hoverTotalEmax");if(el)el.textContent="悬停查看";$("lens").classList.remove("show");$("lens").setAttribute("aria-hidden","true");}
+function hideLens(){hover=null;const e=$("hoverTotalEmax"),s=$("hoverTotalSmax");if(e)e.textContent="|E|max：悬停查看";if(s)s.textContent="|S|max：悬停查看";$("lens").classList.remove("show");$("lens").setAttribute("aria-hidden","true");}
 function showLens(axis,e){
  if(!state.rasters[axis])return;
- const uv=plotUV($("plot"+axis.toUpperCase()),e);
- if(!uv){hideLens();return;}
+ const rawUV=plotUV($("plot"+axis.toUpperCase()),e);
+ if(!rawUV){hideLens();return;}
+ const prm=params(),targetProjection=F.projectPoint(prm,axis,prm.target);
+ // Snap pointer positions on the target marker to the exact target coordinate.
+ const snapToTarget=targetProjection.dist<1e-6&&targetProjection.u>=0&&targetProjection.u<=1&&targetProjection.v>=0&&targetProjection.v<=1&&Math.hypot((rawUV.u-targetProjection.u)*SZ,(rawUV.v-targetProjection.v)*SZ)<=9;
+ const uv=snapToTarget?{u:targetProjection.u,v:targetProjection.v}:rawUV;
  hover={axis,event:e};
  const source=state.rasters[axis],n=source.width,sw=Math.min(n,Math.max(8,n*.12));
  const ix=F.clamp(uv.u*n-sw/2,0,n-sw),iy=F.clamp(uv.v*n-sw/2,0,n-sw);
  const lc=$("lensCanvas"),g=lc.getContext("2d");g.imageSmoothingEnabled=false;g.drawImage(source,ix,iy,sw,sw,0,0,444,444);
  const cx=(uv.u*n-ix)/sw*444,cy=(uv.v*n-iy)/sw*444;g.strokeStyle="#fff";g.lineWidth=3;g.strokeRect(cx-11,cy-11,22,22);
- const xyz=F.planePoint(params(),axis,uv.u,uv.v),a=state.values[axis],i=F.clamp(Math.floor(uv.u*n),0,n-1),j=F.clamp(Math.floor(uv.v*n),0,n-1);
+ const xyz=snapToTarget?{...prm.target}:F.planePoint(prm,axis,uv.u,uv.v);
  $("lensCoord").textContent=F.AXES.map(k=>k+"="+fmt(xyz[k],2)).join("  ")+" m";
- const field=F.fieldAt(params(),xyz);
- const direct=F.instantaneous(field,state.t);
- const unit=state.mode==="E"?" V/m":" W/cm²";
- const current=state.mode==="E"?direct.E:direct.S;
- const totalCycleMax=maxTotalFieldOverCycle(field);
- const hoverMaxEl=$("hoverTotalEmax");if(hoverMaxEl)hoverMaxEl.textContent=sci(totalCycleMax)+" V/m";
- let cycleMax=state.mode==="E"?totalCycleMax:0;
- if(state.mode==="S")for(let k=0;k<512;k++){
-  const sample=F.instantaneous(field,k/512);
-  if(sample.S>cycleMax)cycleMax=sample.S;
- }
+ const field=F.fieldAt(prm,xyz),direct=F.instantaneous(field,state.t);
+ const unit=state.mode==="E"?" V/m":" W/cm²",current=state.mode==="E"?direct.E:direct.S;
+ const eMax=maxTotalFieldOverCycle(field),sMax=maxPowerFluxOverCycle(field);
+ const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax");
+ if(hoverE)hoverE.textContent="|E|max："+sci(eMax)+" V/m";
+ if(hoverS)hoverS.textContent="|S|max："+sci(sMax)+" W/cm²";
+ const cycleMax=state.mode==="E"?eMax:sMax;
  $("lensReading").textContent="瞬时值："+sci(current)+unit;
- $("lensMaxReading").textContent="周期最大值："+sci(cycleMax)+unit;
+ $("lensMaxReading").textContent=(state.mode==="E"?"周期最大 |E|：":"周期最大 |S|：")+sci(cycleMax)+unit;
  const div=$("lens");div.classList.add("show");div.setAttribute("aria-hidden","false");
- const W=270,H=392;
- let left=e.clientX+17,top=e.clientY+15;
+ const W=270,H=392;let left=e.clientX+17,top=e.clientY+15;
  if(left+W>window.innerWidth-5)left=e.clientX-W-17;
  if(top+H>window.innerHeight-5)top=e.clientY-H-17;
  div.style.left=Math.max(5,left)+"px";div.style.top=Math.max(5,top)+"px";
