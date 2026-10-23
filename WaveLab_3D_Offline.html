@@ -169,6 +169,11 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
 .metric-value{min-height:31px;display:flex;align-items:center;justify-content:center;border:1px solid #cbdde5;border-radius:7px;background:#f4fafb;color:#126f82;padding:4px 2px;text-align:center;font:700 10px/1.2 Consolas,monospace;overflow-wrap:anywhere}
 .metric-subvalue{display:block;text-align:center;color:var(--muted);font-size:9px;line-height:1.25;margin-top:3px;white-space:nowrap}
 
+
+/* Pulse-power convention: RF envelope peak, not long-term duty-cycle average. */
+.pulse-power-note{margin:9px 0 12px;padding:9px 10px;border:1px solid #d4e5ec;border-radius:9px;background:#f6fafc;color:#526a79;font-size:11px;line-height:1.55}
+.pulse-power-note strong{color:#087e91}
+
 </style></head>
 <body><div class="app">
 <aside class="sidebar">
@@ -211,6 +216,7 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
 
  <section class="section"><div class="name-row"><h2 style="margin:0">源节点</h2><input id="count" type="number" min="1" max="64" step="1" value="4" style="width:83px" aria-label="节点数量"></div>
  <div class="inline-actions" style="margin-bottom:13px"><button id="equalPhase">同相</button><button id="randomPhase">随机相位</button></div>
+ <div class="pulse-power-note" title="峰值功率是脉冲平顶期间的射频功率包络（按载波周期平均），不是载波瞬时功率，也不是包含占空比的长期平均功率。">节点功率 = <strong>单脉冲射频包络峰值</strong>（平顶），不乘占空比。<br>软件“载波周期平均”仅对微波振荡求平均。</div>
  <div id="nodes"></div></section>
 </aside>
 <main class="main">
@@ -221,7 +227,7 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
  </div>
  <section class="figure card"><div class="fig-head"><h2>空间场分布</h2><div class="field-max-readout" aria-live="polite" aria-label="悬浮点与目标点的周期峰值"><div class="field-max-row"><span>悬浮点周期峰值</span><strong><span id="hoverTotalEmax">|E|max：悬停查看</span><span id="hoverTotalSmax" style="display:none">|S|max：悬停查看</span></strong></div><div class="field-max-row"><span>目标点周期峰值</span><strong><span id="targetTotalEmax">|E|max：—</span><span id="targetTotalSmax" style="display:none">|S|max：—</span></strong></div></div><div class="fig-tools">
     <label class="max-toggle" for="showMaxPoint"><input id="showMaxPoint" type="checkbox" checked>显示最大值点</label>
-    <div class="mode"><button id="modeE" class="selected">瞬时电场 |E|</button><button id="modeS">瞬时功率通量 |S|</button></div>
+    <div class="mode"><button id="modeE" class="selected">瞬时电场 |E|</button><button id="modeS">载波瞬时功率通量 |S|</button></div>
   </div></div>
   <div class="figure-layout">
    <div class="slice"><h3>YZ 截面 <span id="labelX">x = 0 m</span></h3><canvas id="plotX" width="580" height="568" aria-label="YZ 截面场图"></canvas></div>
@@ -595,9 +601,9 @@ function renderNodes(){
   const hdr=document.createElement("div");hdr.className="node-head";
   hdr.innerHTML='<i class="dot" style="background:'+colors[i%colors.length]+'"></i>节点 '+(i+1);e.appendChild(hdr);
   const cells=document.createElement("div");cells.className="node-fields";
-  [["x","X / m"],["y","Y / m"],["z","Z / m"],["phase","相位 / °"],["power","功率 / kW"]].forEach(pair=>{
+  [["x","X / m"],["y","Y / m"],["z","Z / m"],["phase","相位 / °"],["power","脉冲峰值 / kW"]].forEach(pair=>{
    const d=document.createElement("div"),label=document.createElement("label"),input=document.createElement("input");
-   const key=pair[0];label.textContent=pair[1];input.type="number";input.step="any";input.value=key==="power"?nd[key]/1000:nd[key];input.min=key==="power"?"0":"";
+   const key=pair[0];label.textContent=pair[1];if(key==="power")label.title="速调管单脉冲内的射频包络峰值；计算不乘占空比";input.type="number";input.step="any";input.value=key==="power"?nd[key]/1000:nd[key];input.min=key==="power"?"0":"";
    input.setAttribute("aria-label","节点"+(i+1)+" "+pair[1]);
    input.addEventListener("change",()=>{
     const num=Number(input.value);
@@ -608,7 +614,7 @@ function renderNodes(){
    d.appendChild(label);d.appendChild(input);cells.appendChild(d);
   });
   const metric=document.createElement("div");metric.className="readonly-metric";
-  const metricLabel=document.createElement("label");metricLabel.textContent="EIRP / kW";
+  const metricLabel=document.createElement("label");metricLabel.textContent="峰值EIRP / kW";
   const metricValue=document.createElement("div");metricValue.className="metric-value";metricValue.dataset.eirpIndex=String(i);metricValue.textContent="—";
   const metricDbw=document.createElement("small");metricDbw.className="metric-subvalue";metricDbw.dataset.eirpDbwIndex=String(i);metricDbw.textContent="— dBW";
   metric.appendChild(metricLabel);metric.appendChild(metricValue);metric.appendChild(metricDbw);cells.appendChild(metric);
@@ -713,7 +719,7 @@ function updateStudyReadouts(){
  const cycle=updateTargetCycleMaximum(prm);
  $("targetEStat").textContent=sci(inst.E);
  $("targetEMaxStat").textContent=sci(cycle.Emax);
- $("targetTotalEmax").textContent="合成峰值 "+sci(cycle.Emax)+" V/m";$("targetTotalSmax").textContent="周期平均 "+sci(cycle.Smean)+" · 峰值 "+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
+ $("targetTotalEmax").textContent="合成峰值 "+sci(cycle.Emax)+" V/m";$("targetTotalSmax").textContent="脉冲平顶/载波平均 "+sci(cycle.Smean)+" · 载波瞬峰 "+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
  $("targetSStat").textContent=sci(inst.S);
  $("targetSMaxStat").textContent=sci(cycle.Smax);
  updateStudyPlaneTitle();
@@ -1411,11 +1417,11 @@ function showLens(axis,e){
  const sMax=maxPowerFluxOverCycle(field);
  const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax");
  if(hoverE)hoverE.textContent="合成峰值 "+sci(peak.E)+" V/m";
- if(hoverS)hoverS.textContent="周期平均 "+sci(cycleMeanPowerDensity(field))+" · 峰值 "+sci(sMax)+" W/cm²";
+ if(hoverS)hoverS.textContent="脉冲平顶/载波平均 "+sci(cycleMeanPowerDensity(field))+" · 载波瞬峰 "+sci(sMax)+" W/cm²";
  syncCycleReadoutMode();
  const cycleMax=state.mode==="E"?peak.E:sMax;
  $("lensReading").textContent="瞬时值："+sci(current)+unit;
- $("lensMaxReading").textContent=state.mode==="E"?"周期合成峰值："+sci(cycleMax)+" V/m":"周期平均："+sci(cycleMeanPowerDensity(field))+" W/cm² · 峰值："+sci(sMax)+" W/cm²";
+ $("lensMaxReading").textContent=state.mode==="E"?"周期合成峰值："+sci(cycleMax)+" V/m":"脉冲平顶/载波平均："+sci(cycleMeanPowerDensity(field))+" W/cm² · 载波瞬峰："+sci(sMax)+" W/cm²";
  $("lensComponents").textContent="峰值分量：Ex="+sci(peak.ex)+"，Ey="+sci(peak.ey)+"，Ez="+sci(peak.ez)+" V/m；平方和开根号="+sci(peak.E)+" V/m";
  const div=$("lens");div.classList.add("show");div.setAttribute("aria-hidden","false");
  const W=270,H=445;let left=e.clientX+17,top=e.clientY+15;
