@@ -31,9 +31,9 @@ function renderNodes(){
   const hdr=document.createElement("div");hdr.className="node-head";
   hdr.innerHTML='<i class="dot" style="background:'+colors[i%colors.length]+'"></i>节点 '+(i+1);e.appendChild(hdr);
   const cells=document.createElement("div");cells.className="node-fields";
-  [["x","X / m"],["y","Y / m"],["z","Z / m"],["phase","相位 / °"],["power","功率 / kW"]].forEach(pair=>{
+  [["x","X / m"],["y","Y / m"],["z","Z / m"],["phase","相位 / °"],["power","脉冲峰值 / kW"]].forEach(pair=>{
    const d=document.createElement("div"),label=document.createElement("label"),input=document.createElement("input");
-   const key=pair[0];label.textContent=pair[1];input.type="number";input.step="any";input.value=key==="power"?nd[key]/1000:nd[key];input.min=key==="power"?"0":"";
+   const key=pair[0];label.textContent=pair[1];if(key==="power")label.title="速调管单脉冲内的射频包络峰值；计算不乘占空比";input.type="number";input.step="any";input.value=key==="power"?nd[key]/1000:nd[key];input.min=key==="power"?"0":"";
    input.setAttribute("aria-label","节点"+(i+1)+" "+pair[1]);
    input.addEventListener("change",()=>{
     const num=Number(input.value);
@@ -44,7 +44,7 @@ function renderNodes(){
    d.appendChild(label);d.appendChild(input);cells.appendChild(d);
   });
   const metric=document.createElement("div");metric.className="readonly-metric";
-  const metricLabel=document.createElement("label");metricLabel.textContent="EIRP / kW";
+  const metricLabel=document.createElement("label");metricLabel.textContent="峰值EIRP / kW";
   const metricValue=document.createElement("div");metricValue.className="metric-value";metricValue.dataset.eirpIndex=String(i);metricValue.textContent="—";
   const metricDbw=document.createElement("small");metricDbw.className="metric-subvalue";metricDbw.dataset.eirpDbwIndex=String(i);metricDbw.textContent="— dBW";
   metric.appendChild(metricLabel);metric.appendChild(metricValue);metric.appendChild(metricDbw);cells.appendChild(metric);
@@ -149,7 +149,7 @@ function updateStudyReadouts(){
  const cycle=updateTargetCycleMaximum(prm);
  $("targetEStat").textContent=sci(inst.E);
  $("targetEMaxStat").textContent=sci(cycle.Emax);
- const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax");if(targetMaxEl)targetMaxEl.textContent="合成峰值 "+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="周期平均 "+sci(cycle.Smean)+" · 峰值 "+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
+ const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax");if(targetMaxEl)targetMaxEl.textContent="合成峰值 "+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="脉冲平顶/载波平均 "+sci(cycle.Smean)+" · 载波瞬峰 "+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
  $("targetSStat").textContent=sci(inst.S);
  $("targetSMaxStat").textContent=sci(cycle.Smax);
  updateStudyPlaneTitle();
@@ -850,11 +850,11 @@ function showLens(axis,e){
  const sMax=maxPowerFluxOverCycle(field);
  const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax");
  if(hoverE)hoverE.textContent="合成峰值 "+sci(peak.E)+" V/m";
- if(hoverS)hoverS.textContent="周期平均 "+sci(cycleMeanPowerDensity(field))+" · 峰值 "+sci(sMax)+" W/cm²";
+ if(hoverS)hoverS.textContent="脉冲平顶/载波平均 "+sci(cycleMeanPowerDensity(field))+" · 载波瞬峰 "+sci(sMax)+" W/cm²";
  syncCycleReadoutMode();
  const cycleMax=state.mode==="E"?peak.E:sMax;
  $("lensReading").textContent="瞬时值："+sci(current)+unit;
- $("lensMaxReading").textContent=state.mode==="E"?"周期合成峰值："+sci(cycleMax)+" V/m":"周期平均："+sci(cycleMeanPowerDensity(field))+" W/cm² · 峰值："+sci(sMax)+" W/cm²";
+ $("lensMaxReading").textContent=state.mode==="E"?"周期合成峰值："+sci(cycleMax)+" V/m":"脉冲平顶/载波平均："+sci(cycleMeanPowerDensity(field))+" W/cm² · 载波瞬峰："+sci(sMax)+" W/cm²";
  $("lensComponents").textContent="峰值分量：Ex="+sci(peak.ex)+"，Ey="+sci(peak.ey)+"，Ez="+sci(peak.ez)+" V/m；平方和开根号="+sci(peak.E)+" V/m";
  const div=$("lens");div.classList.add("show");div.setAttribute("aria-hidden","false");
  const W=270,H=445;let left=e.clientX+17,top=e.clientY+15;
