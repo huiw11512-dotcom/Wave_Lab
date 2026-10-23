@@ -1,5 +1,5 @@
 "use strict";
-importScripts("./physics3d.js?v=20261022-zpol2");
+importScripts("./physics3d.js?v=20261023-instantaneous-source-peak");
 self.onmessage=function(event){
   try {
     const p=event.data.params,n=event.data.n;
