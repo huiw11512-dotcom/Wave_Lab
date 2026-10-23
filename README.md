@@ -70,3 +70,8 @@
 [下载 WaveLab_3D_Offline.html](./WaveLab_3D_Offline.html)
 
 这份 HTML 内嵌样式、三维计算引擎、后台 Worker 和交互脚本。下载后可直接在 Chrome / Edge 浏览器打开，无需域名、Web 服务器或联网。文件约 81 KB。可通过邮件、U盘或即时通信发送。这里的链接是当前仓库状态的离线快照，主站更新后需重新导出本文件才会同步变化。暂未生成 Windows EXE；可后续使用 Electron/WebView2 封装。
+
+
+### Power convention (2026-10-23)
+
+The per-source kW input is **the instantaneous maximum power within a single RF oscillation cycle** of a forward-traveling single-frequency wave. This is **not** an ordinary RF power meter reading (carrier-cycle-averaged power), nor a pulsed RF envelope peak as ordinarily specified for a klystron. For an ideal sinusoidal traveling wave, the source cycle-average is input/2. The amplitude satisfies `E0 = sqrt(Z0 * P_in * G / (4*pi*R^2))` at boresight. For one 1000 kW input node, 10 GHz, aperture 5λ × 5λ, η=0.7, and R=25 sqrt(2) m, the instantaneous peak flux is 1.400 W/cm² and the cycle-average is 0.700 W/cm². For directional multi-source fields, magnitude of average vector Poynting flux and average of instantaneous magnitudes are different, and neither necessarily equals target absorbed power.
