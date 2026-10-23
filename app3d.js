@@ -39,11 +39,30 @@ function renderNodes(){
     const num=Number(input.value);
     if(!Number.isFinite(num)||input.value.trim()===""||(key==="power"&&num<0)){input.value=key==="power"?nd[key]/1000:nd[key];return;}
     nd[key]=key==="power"?num*1000:num;
-    input.value=String(key==="power"?nd[key]/1000:nd[key]);queue();
+    input.value=String(key==="power"?nd[key]/1000:nd[key]);updateAntennaMetrics();queue();
    });
    d.appendChild(label);d.appendChild(input);cells.appendChild(d);
   });
+  const metric=document.createElement("div");metric.className="readonly-metric";
+  const metricLabel=document.createElement("label");metricLabel.textContent="EIRP / kW";
+  const metricValue=document.createElement("div");metricValue.className="metric-value";metricValue.dataset.eirpIndex=String(i);metricValue.textContent="—";
+  const metricDbw=document.createElement("small");metricDbw.className="metric-subvalue";metricDbw.dataset.eirpDbwIndex=String(i);metricDbw.textContent="— dBW";
+  metric.appendChild(metricLabel);metric.appendChild(metricValue);metric.appendChild(metricDbw);cells.appendChild(metric);
   e.appendChild(cells);root.appendChild(e);
+ });
+ updateAntennaMetrics();
+}
+function updateAntennaMetrics(){
+ const gain=4*Math.PI*state.eta*state.apX*state.apY;
+ const gainEl=$("antennaGainValue");
+ if(gainEl)gainEl.textContent=(10*Math.log10(gain)).toFixed(2)+" dBi · "+gain.toFixed(1)+"×";
+ document.querySelectorAll("[data-eirp-index]").forEach(el=>{
+  const i=Number(el.dataset.eirpIndex),node=state.nodes[i];if(!node)return;
+  const eirpW=node.power*gain,eirpKw=eirpW/1000;
+  el.textContent=sci(eirpKw)+" kW";
+  const dbw=document.querySelector('[data-eirp-dbw-index="'+i+'"]');
+  if(dbw)dbw.textContent=(eirpW>0?(10*Math.log10(eirpW)).toFixed(2):"-∞")+" dBW";
+  el.title="EIRP = 节点输入功率 × 天线线性增益；"+(eirpKw).toLocaleString("zh-CN",{maximumFractionDigits:3})+" kW";
  });
 }
 function ePhasorPower(a){
@@ -321,7 +340,7 @@ function bind(){
  ["Lx","Lx",.05,500],["Ly","Ly",.05,500],["Lz","Lz",.05,500],["zMin","zMin",-1e6,1e6]];
  numbers.forEach(([id,key,lo,hi])=>$(id).addEventListener("change",()=>{
   let v=Number($(id).value);if($(id).value.trim()===""||!Number.isFinite(v)||v<lo||v>hi){$(id).value=state[key];return;}
-  state[key]=v;queue();
+  state[key]=v;updateAntennaMetrics();queue();
  }));
  F.AXES.forEach(axis=>{
   const input=$("target"+axis.toUpperCase());
