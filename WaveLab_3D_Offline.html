@@ -161,6 +161,14 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
 .threshold-controls.enabled .threshold-note{color:#303030}
 @media(max-width:700px){.threshold-controls{align-items:flex-start;gap:10px}.threshold-note{flex-basis:100%}}
 
+
+/* Antenna gain and per-node EIRP readouts */
+.antenna-gain-value{font-size:12px;line-height:1.35;white-space:normal;overflow-wrap:anywhere;color:#087e91}
+.readonly-metric{min-width:0}
+.readonly-metric label{font-size:11px;text-align:center;display:block;margin-bottom:4px;color:var(--muted)}
+.metric-value{min-height:31px;display:flex;align-items:center;justify-content:center;border:1px solid #cbdde5;border-radius:7px;background:#f4fafb;color:#126f82;padding:4px 2px;text-align:center;font:700 10px/1.2 Consolas,monospace;overflow-wrap:anywhere}
+.metric-subvalue{display:block;text-align:center;color:var(--muted);font-size:9px;line-height:1.25;margin-top:3px;white-space:nowrap}
+
 </style></head>
 <body><div class="app">
 <aside class="sidebar">
@@ -173,6 +181,7 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
    <div><label for="apY">口径宽 / λ</label><input id="apY" type="number" min=".5" max="30" value="5" step=".5"></div>
    <div><label for="eta">口面效率</label><input id="eta" type="number" min=".01" max="1" value=".7" step=".05"></div>
    <div><label>波长</label><div id="lambdaValue" class="meta" style="padding-top:12px;font-weight:750">29.98 mm</div></div>
+   <div><label>天线增益</label><div id="antennaGainValue" class="meta antenna-gain-value" style="padding-top:12px;font-weight:750" title="由口面效率、口径和波长计算">23.42 dBi</div></div>
   </div>
  </section>
  <section class="section"><h2>空间显示范围 / m</h2><div class="fields">
@@ -594,11 +603,30 @@ function renderNodes(){
     const num=Number(input.value);
     if(!Number.isFinite(num)||input.value.trim()===""||(key==="power"&&num<0)){input.value=key==="power"?nd[key]/1000:nd[key];return;}
     nd[key]=key==="power"?num*1000:num;
-    input.value=String(key==="power"?nd[key]/1000:nd[key]);queue();
+    input.value=String(key==="power"?nd[key]/1000:nd[key]);updateAntennaMetrics();queue();
    });
    d.appendChild(label);d.appendChild(input);cells.appendChild(d);
   });
+  const metric=document.createElement("div");metric.className="readonly-metric";
+  const metricLabel=document.createElement("label");metricLabel.textContent="EIRP / kW";
+  const metricValue=document.createElement("div");metricValue.className="metric-value";metricValue.dataset.eirpIndex=String(i);metricValue.textContent="—";
+  const metricDbw=document.createElement("small");metricDbw.className="metric-subvalue";metricDbw.dataset.eirpDbwIndex=String(i);metricDbw.textContent="— dBW";
+  metric.appendChild(metricLabel);metric.appendChild(metricValue);metric.appendChild(metricDbw);cells.appendChild(metric);
   e.appendChild(cells);root.appendChild(e);
+ });
+ updateAntennaMetrics();
+}
+function updateAntennaMetrics(){
+ const gain=4*Math.PI*state.eta*state.apX*state.apY;
+ const gainEl=$("antennaGainValue");
+ if(gainEl)gainEl.textContent=(10*Math.log10(gain)).toFixed(2)+" dBi · "+gain.toFixed(1)+"×";
+ document.querySelectorAll("[data-eirp-index]").forEach(el=>{
+  const i=Number(el.dataset.eirpIndex),node=state.nodes[i];if(!node)return;
+  const eirpW=node.power*gain,eirpKw=eirpW/1000;
+  el.textContent=sci(eirpKw)+" kW";
+  const dbw=document.querySelector('[data-eirp-dbw-index="'+i+'"]');
+  if(dbw)dbw.textContent=(eirpW>0?(10*Math.log10(eirpW)).toFixed(2):"-∞")+" dBW";
+  el.title="EIRP = 节点输入功率 × 天线线性增益；"+(eirpKw).toLocaleString("zh-CN",{maximumFractionDigits:3})+" kW";
  });
 }
 function ePhasorPower(a){
@@ -876,7 +904,7 @@ function bind(){
  ["Lx","Lx",.05,500],["Ly","Ly",.05,500],["Lz","Lz",.05,500],["zMin","zMin",-1e6,1e6]];
  numbers.forEach(([id,key,lo,hi])=>$(id).addEventListener("change",()=>{
   let v=Number($(id).value);if($(id).value.trim()===""||!Number.isFinite(v)||v<lo||v>hi){$(id).value=state[key];return;}
-  state[key]=v;queue();
+  state[key]=v;updateAntennaMetrics();queue();
  }));
  F.AXES.forEach(axis=>{
   const input=$("target"+axis.toUpperCase());
