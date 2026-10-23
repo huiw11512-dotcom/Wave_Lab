@@ -26,7 +26,7 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
 .workbar .timeline{flex:1;min-width:220px}.timeline .value{font-weight:750;color:#1d778d;font-family:Consolas,monospace;float:right;font-size:14px}
 .select-inline{width:auto;min-width:90px;height:40px}.workbar .speed{width:100px}
 .figure{padding:20px 20px 22px;margin-bottom:17px}.fig-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:13px}
-.fig-head h2{font-size:19px;font-weight:770;margin:0}.field-max-readout{display:flex;flex-direction:column;gap:4px;flex:0 1 435px;min-width:395px;margin:0 auto;padding:7px 10px;border:1px solid #d9e8ed;border-radius:8px;background:#f8fbfc}.field-max-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;line-height:1.45;white-space:nowrap}.field-max-row>span{color:#597183;flex:0 0 auto}.field-max-row strong{display:flex;align-items:baseline;justify-content:flex-end;gap:10px;color:#087e91;font-family:Consolas,monospace;font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}.field-max-row strong span{color:#087e91}.mode{display:inline-flex;padding:4px;border:1px solid #dce7eb;border-radius:10px;background:#f7f9fa;gap:4px}
+.fig-head h2{font-size:19px;font-weight:770;margin:0}.field-max-readout{display:flex;flex-direction:column;gap:4px;flex:0 1 560px;min-width:420px;margin:0 auto;padding:7px 10px;border:1px solid #d9e8ed;border-radius:8px;background:#f8fbfc}.field-max-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;line-height:1.45;white-space:nowrap}.field-max-row>span{color:#597183;flex:0 0 auto}.field-max-row strong{display:flex;align-items:baseline;justify-content:flex-end;gap:10px;color:#087e91;font-family:Consolas,monospace;font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}.field-max-row strong span{color:#087e91}.mode{display:inline-flex;padding:4px;border:1px solid #dce7eb;border-radius:10px;background:#f7f9fa;gap:4px}
 .mode button{border:0;background:transparent;color:#5a7383;padding:9px 14px;font-size:14px;border-radius:7px}.mode button.selected{background:#fff;color:#087e91;box-shadow:0 2px 10px rgba(40,75,87,.11)}
 .figure-layout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.slice{min-width:0}.slice h3{display:flex;gap:9px;align-items:center;justify-content:center;font-size:15px;margin:5px 0 7px;font-weight:760}.slice h3 span{font-weight:600;font-size:13px;color:var(--muted)}
 .slice canvas{display:block;width:100%;height:auto;aspect-ratio:580/675;cursor:crosshair}
@@ -673,6 +673,14 @@ function peakTotalFieldComponents(a){
  return {E:Math.hypot(ex,ey,ez),ex,ey,ez,t:((theta/(2*Math.PI))%1+1)%1};
 }
 function maxTotalFieldOverCycle(a){return peakTotalFieldComponents(a).E;}
+function cycleMeanPowerDensity(a){
+ // Conventional time-averaged Poynting vector: (Er × Hr + Ei × Hi)/2.
+ // F stores cosine and sine coefficient vectors; result is converted to W/cm².
+ const sx=(a.ery*a.hrz-a.erz*a.hry+a.eiy*a.hiz-a.eiz*a.hiy)/20000;
+ const sy=(a.erz*a.hrx-a.erx*a.hrz+a.eiz*a.hix-a.eix*a.hiz)/20000;
+ const sz=(a.erx*a.hry-a.ery*a.hrx+a.eix*a.hiy-a.eiy*a.hix)/20000;
+ return Math.hypot(sx,sy,sz);
+}
 function maxPowerFluxOverCycle(a,samples=4096){
  // Dense sampling of the magnitude of the Poynting vector over one full period.
  let Smax=0;
@@ -687,8 +695,8 @@ function updateTargetCycleMaximum(prm){
  const key=JSON.stringify({freq:prm.freq,apX:prm.apX,apY:prm.apY,eta:prm.eta,target:prm.target,nodes:prm.nodes});
  if(targetCycleCache.key===key)return targetCycleCache;
  const phasor=F.fieldAt(prm,prm.target);
- const peak=peakTotalFieldComponents(phasor),Emax=peak.E,Smax=maxPowerFluxOverCycle(phasor);
- targetCycleCache={key,Emax,Smax,peak};
+ const peak=peakTotalFieldComponents(phasor),Emax=peak.E,Smax=maxPowerFluxOverCycle(phasor),Smean=cycleMeanPowerDensity(phasor);
+ targetCycleCache={key,Emax,Smax,Smean,peak};
  return targetCycleCache;
 }
 function syncCycleReadoutMode(){
@@ -705,7 +713,7 @@ function updateStudyReadouts(){
  const cycle=updateTargetCycleMaximum(prm);
  $("targetEStat").textContent=sci(inst.E);
  $("targetEMaxStat").textContent=sci(cycle.Emax);
- $("targetTotalEmax").textContent="|E|max："+sci(cycle.Emax)+" V/m";$("targetTotalSmax").textContent="|S|max："+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
+ $("targetTotalEmax").textContent="合成峰值 "+sci(cycle.Emax)+" V/m";$("targetTotalSmax").textContent="周期平均 "+sci(cycle.Smean)+" · 峰值 "+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
  $("targetSStat").textContent=sci(inst.S);
  $("targetSMaxStat").textContent=sci(cycle.Smax);
  updateStudyPlaneTitle();
@@ -1402,12 +1410,12 @@ function showLens(axis,e){
  const unit=state.mode==="E"?" V/m":" W/cm²",current=state.mode==="E"?direct.E:direct.S;
  const sMax=maxPowerFluxOverCycle(field);
  const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax");
- if(hoverE)hoverE.textContent="|E|max："+sci(peak.E)+" V/m";
- if(hoverS)hoverS.textContent="|S|max："+sci(sMax)+" W/cm²";
+ if(hoverE)hoverE.textContent="合成峰值 "+sci(peak.E)+" V/m";
+ if(hoverS)hoverS.textContent="周期平均 "+sci(cycleMeanPowerDensity(field))+" · 峰值 "+sci(sMax)+" W/cm²";
  syncCycleReadoutMode();
  const cycleMax=state.mode==="E"?peak.E:sMax;
  $("lensReading").textContent="瞬时值："+sci(current)+unit;
- $("lensMaxReading").textContent=(state.mode==="E"?"周期最大 |E|：":"周期最大 |S|：")+sci(cycleMax)+unit;
+ $("lensMaxReading").textContent=state.mode==="E"?"周期合成峰值："+sci(cycleMax)+" V/m":"周期平均："+sci(cycleMeanPowerDensity(field))+" W/cm² · 峰值："+sci(sMax)+" W/cm²";
  $("lensComponents").textContent="峰值分量：Ex="+sci(peak.ex)+"，Ey="+sci(peak.ey)+"，Ez="+sci(peak.ez)+" V/m；平方和开根号="+sci(peak.E)+" V/m";
  const div=$("lens");div.classList.add("show");div.setAttribute("aria-hidden","false");
  const W=270,H=445;let left=e.clientX+17,top=e.clientY+15;
