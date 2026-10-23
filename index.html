@@ -42,7 +42,7 @@
 
  <section class="section"><div class="name-row"><h2 style="margin:0">源节点</h2><input id="count" type="number" min="1" max="64" step="1" value="4" style="width:83px" aria-label="节点数量"></div>
  <div class="inline-actions" style="margin-bottom:13px"><button id="equalPhase">同相</button><button id="randomPhase">随机相位</button></div>
- <div class="pulse-power-note" title="输入功率定义为单频电磁波瞬时功率 p(t) 的最大值，而不是普通射频功率计的周期平均读数。">节点功率 = <strong>微波振荡周期内瞬时峰值</strong>。理想单频行波：平均功率 = 输入值 / 2。<br>例如瞬时峰值 1000 kW → 周期平均 500 kW（不是普通功率计读数 1000 kW）。</div>
+ 
  <div id="nodes"></div></section>
 </aside>
 <main class="main">
@@ -80,17 +80,17 @@
    <div class="threshold-field"><label for="thresholdMode">阈值物理量</label><select id="thresholdMode"><option value="E">电场强度 |E|</option><option value="S">功率密度 |S|</option></select></div>
    <div class="threshold-field threshold-value-field"><label for="thresholdValue">阈值（≥）</label><input id="thresholdValue" type="number" min="0" step="any" value="1000"></div>
    <strong id="thresholdUnit">V/m</strong>
-   <span class="threshold-note">超阈值区域在切面与三维预览中显示为黑色</span>
+   
   </div>
 
  </section>
  <section class="card panel study-panel">
   <div class="scene-heading"><h2>共面干涉分析</h2><div id="studyPlaneTitle">YZ 平面 · x = 0 m</div></div>
   <div class="study-metrics">
-   <div class="study-metric"><label>目标点瞬时电场</label><strong id="targetEStat">—</strong><span>V/m · 当前周期时刻</span></div>
-   <div class="study-metric"><label>目标点周期最大电场</label><strong id="targetEMaxStat">—</strong><span>V/m · 一个完整周期内最大值</span></div>
-   <div class="study-metric"><label>目标点瞬时功率通量</label><strong id="targetSStat">—</strong><span>W/cm² · 当前周期时刻</span></div>
-   <div class="study-metric"><label>目标点周期最大功率通量</label><strong id="targetSMaxStat">—</strong><span>W/cm² · 一个完整周期内最大值</span></div>
+   <div class="study-metric"><label>目标点瞬时电场</label><strong id="targetEStat">—</strong><span>V/m</span></div>
+   <div class="study-metric"><label>目标点周期最大电场</label><strong id="targetEMaxStat">—</strong><span>V/m</span></div>
+   <div class="study-metric"><label>目标点瞬时功率通量</label><strong id="targetSStat">—</strong><span>W/cm²</span></div>
+   <div class="study-metric"><label>目标点周期最大功率通量</label><strong id="targetSMaxStat">—</strong><span>W/cm²</span></div>
    <div class="study-metric"><label>目标点相干合成比</label><strong id="coherenceStat">—</strong><span id="coherenceSub">参考：各节点电场相量模平方之和</span></div>
    <div class="study-metric"><label id="planeRangeLabel">当前平面场值范围</label><strong id="planeRangeStat">—</strong><span id="planeRangeSub">—</span></div>
   </div>
