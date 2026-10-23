@@ -1,5 +1,5 @@
 /* Wave Lab 3D: independent, low-power, ideal rectangular-aperture propagation.
-   Units: m, Hz, W, peak E (V/m), H (A/m). No finite-aperture near field. */
+   Units: m, Hz, W. Source power is the maximum instantaneous (single-frequency) traveling-wave power, NOT the cycle mean or RF pulse envelope rating; therefore the source E0 satisfies S_peak=E0²/Z0=P_peak*G/(4πR²). E, H are instantaneous peak amplitudes. No finite-aperture near field. */
 (function(root){
   "use strict";
   const C=299792458, Z0=376.730313668, TWO=2*Math.PI;
@@ -77,7 +77,7 @@
     if(dir<=0)return;  // forward-hemisphere model only
     const u=dx*f.ux+dy*f.uy+dz*f.uz, v=dx*f.vx+dy*f.vy+dz*f.vz;
     const pat=sinc(Math.PI*p.apX*u)*sinc(Math.PI*p.apY*v)*(1+dir)*0.5;
-    const amp=Math.sqrt(2*Z0*s.power*pc.gain/(4*Math.PI*R*R))*pat;
+    const amp=Math.sqrt(Z0*s.power*pc.gain/(4*Math.PI*R*R))*pat;
 
     // Far-field E is transverse to the observation ray. Start from the
     // source's Z-polarization vector, then project it onto that transverse plane.
