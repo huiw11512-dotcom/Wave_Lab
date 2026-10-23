@@ -109,6 +109,14 @@ function peakTotalFieldComponents(a){
  return {E:Math.hypot(ex,ey,ez),ex,ey,ez,t:((theta/(2*Math.PI))%1+1)%1};
 }
 function maxTotalFieldOverCycle(a){return peakTotalFieldComponents(a).E;}
+function cycleMeanPowerDensity(a){
+ // Conventional time-averaged Poynting vector: (Er × Hr + Ei × Hi)/2.
+ // F stores cosine and sine coefficient vectors; result is converted to W/cm².
+ const sx=(a.ery*a.hrz-a.erz*a.hry+a.eiy*a.hiz-a.eiz*a.hiy)/20000;
+ const sy=(a.erz*a.hrx-a.erx*a.hrz+a.eiz*a.hix-a.eix*a.hiz)/20000;
+ const sz=(a.erx*a.hry-a.ery*a.hrx+a.eix*a.hiy-a.eiy*a.hix)/20000;
+ return Math.hypot(sx,sy,sz);
+}
 function maxPowerFluxOverCycle(a,samples=4096){
  // Dense sampling of the magnitude of the Poynting vector over one full period.
  let Smax=0;
@@ -123,8 +131,8 @@ function updateTargetCycleMaximum(prm){
  const key=JSON.stringify({freq:prm.freq,apX:prm.apX,apY:prm.apY,eta:prm.eta,target:prm.target,nodes:prm.nodes});
  if(targetCycleCache.key===key)return targetCycleCache;
  const phasor=F.fieldAt(prm,prm.target);
- const peak=peakTotalFieldComponents(phasor),Emax=peak.E,Smax=maxPowerFluxOverCycle(phasor);
- targetCycleCache={key,Emax,Smax,peak};
+ const peak=peakTotalFieldComponents(phasor),Emax=peak.E,Smax=maxPowerFluxOverCycle(phasor),Smean=cycleMeanPowerDensity(phasor);
+ targetCycleCache={key,Emax,Smax,Smean,peak};
  return targetCycleCache;
 }
 function syncCycleReadoutMode(){
@@ -141,7 +149,7 @@ function updateStudyReadouts(){
  const cycle=updateTargetCycleMaximum(prm);
  $("targetEStat").textContent=sci(inst.E);
  $("targetEMaxStat").textContent=sci(cycle.Emax);
- const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax");if(targetMaxEl)targetMaxEl.textContent="|E|max："+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="|S|max："+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
+ const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax");if(targetMaxEl)targetMaxEl.textContent="合成峰值 "+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="周期平均 "+sci(cycle.Smean)+" · 峰值 "+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
  $("targetSStat").textContent=sci(inst.S);
  $("targetSMaxStat").textContent=sci(cycle.Smax);
  updateStudyPlaneTitle();
@@ -841,12 +849,12 @@ function showLens(axis,e){
  const unit=state.mode==="E"?" V/m":" W/cm²",current=state.mode==="E"?direct.E:direct.S;
  const sMax=maxPowerFluxOverCycle(field);
  const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax");
- if(hoverE)hoverE.textContent="|E|max："+sci(peak.E)+" V/m";
- if(hoverS)hoverS.textContent="|S|max："+sci(sMax)+" W/cm²";
+ if(hoverE)hoverE.textContent="合成峰值 "+sci(peak.E)+" V/m";
+ if(hoverS)hoverS.textContent="周期平均 "+sci(cycleMeanPowerDensity(field))+" · 峰值 "+sci(sMax)+" W/cm²";
  syncCycleReadoutMode();
  const cycleMax=state.mode==="E"?peak.E:sMax;
  $("lensReading").textContent="瞬时值："+sci(current)+unit;
- $("lensMaxReading").textContent=(state.mode==="E"?"周期最大 |E|：":"周期最大 |S|：")+sci(cycleMax)+unit;
+ $("lensMaxReading").textContent=state.mode==="E"?"周期合成峰值："+sci(cycleMax)+" V/m":"周期平均："+sci(cycleMeanPowerDensity(field))+" W/cm² · 峰值："+sci(sMax)+" W/cm²";
  $("lensComponents").textContent="峰值分量：Ex="+sci(peak.ex)+"，Ey="+sci(peak.ey)+"，Ez="+sci(peak.ez)+" V/m；平方和开根号="+sci(peak.E)+" V/m";
  const div=$("lens");div.classList.add("show");div.setAttribute("aria-hidden","false");
  const W=270,H=445;let left=e.clientX+17,top=e.clientY+15;
