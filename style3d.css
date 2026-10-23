@@ -206,3 +206,8 @@ label{display:block;font-size:13px;color:#597183;font-weight:650;margin-bottom:6
 /* Input is instantaneous peak of single-frequency traveling-wave power; CW cycle mean is half the input. */
 .pulse-power-note{margin:9px 0 12px;padding:9px 10px;border:1px solid #d4e5ec;border-radius:9px;background:#f6fafc;color:#526a79;font-size:11px;line-height:1.55}
 .pulse-power-note strong{color:#087e91}
+
+/* Keep numerical units and metrics; omit explanatory microcopy. */
+.pulse-power-note,.threshold-note,.cycle-physics-note,
+#coherenceSub,#planeRangeSub,#scanSummary{display:none!important}
+.study-metric span{font-size:12px}
