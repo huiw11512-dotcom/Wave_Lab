@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f3f6f8">
-<title>Wave Lab | 三维空间切片</title><link rel="stylesheet" href="./style3d.css?v=20261023-rf-pulse-peak"></head>
+<title>Wave Lab | 三维空间切片</title><link rel="stylesheet" href="./style3d.css?v=20261023-instantaneous-source-peak"></head>
 <body><div class="app">
 <aside class="sidebar">
  <div class="brand"><div class="mark">∿</div><div class="brand-text">Wave Lab</div></div>
@@ -42,7 +42,7 @@
 
  <section class="section"><div class="name-row"><h2 style="margin:0">源节点</h2><input id="count" type="number" min="1" max="64" step="1" value="4" style="width:83px" aria-label="节点数量"></div>
  <div class="inline-actions" style="margin-bottom:13px"><button id="equalPhase">同相</button><button id="randomPhase">随机相位</button></div>
- <div class="pulse-power-note" title="峰值功率是脉冲平顶期间的射频功率包络（按载波周期平均），不是载波瞬时功率，也不是包含占空比的长期平均功率。">节点功率 = <strong>单脉冲射频包络峰值</strong>（平顶），不乘占空比。<br>软件“载波周期平均”仅对微波振荡求平均。</div>
+ <div class="pulse-power-note" title="输入功率定义为单频电磁波瞬时功率 p(t) 的最大值，而不是普通射频功率计的周期平均读数。">节点功率 = <strong>微波振荡周期内瞬时峰值</strong>。理想单频行波：平均功率 = 输入值 / 2。<br>例如瞬时峰值 1000 kW → 周期平均 500 kW（不是普通功率计读数 1000 kW）。</div>
  <div id="nodes"></div></section>
 </aside>
 <main class="main">
@@ -106,5 +106,5 @@
  
 </main></div>
 <div id="lens" class="lens" aria-hidden="true"><div class="lens-head">局部放大 · 5×</div><canvas id="lensCanvas" width="444" height="444"></canvas><div class="lens-pos" id="lensCoord">—</div><div class="lens-val" id="lensReading">—</div><div class="lens-max-val" id="lensMaxReading">—</div><div class="lens-components" id="lensComponents">峰值分量：—</div></div>
-<script src="./physics3d.js?v=20261022-zpol2"></script><script src="./app3d.js?v=20261023-rf-pulse-peak"></script>
+<script src="./physics3d.js?v=20261022-zpol2"></script><script src="./app3d.js?v=20261023-instantaneous-source-peak"></script>
 </body></html>
