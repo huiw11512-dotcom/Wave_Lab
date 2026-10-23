@@ -31,9 +31,9 @@ function renderNodes(){
   const hdr=document.createElement("div");hdr.className="node-head";
   hdr.innerHTML='<i class="dot" style="background:'+colors[i%colors.length]+'"></i>节点 '+(i+1);e.appendChild(hdr);
   const cells=document.createElement("div");cells.className="node-fields";
-  [["x","X / m"],["y","Y / m"],["z","Z / m"],["phase","相位 / °"],["power","脉冲峰值 / kW"]].forEach(pair=>{
+  [["x","X / m"],["y","Y / m"],["z","Z / m"],["phase","相位 / °"],["power","瞬时峰值 / kW"]].forEach(pair=>{
    const d=document.createElement("div"),label=document.createElement("label"),input=document.createElement("input");
-   const key=pair[0];label.textContent=pair[1];if(key==="power")label.title="速调管单脉冲内的射频包络峰值；计算不乘占空比";input.type="number";input.step="any";input.value=key==="power"?nd[key]/1000:nd[key];input.min=key==="power"?"0":"";
+   const key=pair[0];label.textContent=pair[1];if(key==="power")label.title="单频电磁波瞬时功率的最大值；输入1000kW对应周期平均500kW，不等于普通功率计读数";input.type="number";input.step="any";input.value=key==="power"?nd[key]/1000:nd[key];input.min=key==="power"?"0":"";
    input.setAttribute("aria-label","节点"+(i+1)+" "+pair[1]);
    input.addEventListener("change",()=>{
     const num=Number(input.value);
@@ -44,7 +44,7 @@ function renderNodes(){
    d.appendChild(label);d.appendChild(input);cells.appendChild(d);
   });
   const metric=document.createElement("div");metric.className="readonly-metric";
-  const metricLabel=document.createElement("label");metricLabel.textContent="峰值EIRP / kW";
+  const metricLabel=document.createElement("label");metricLabel.textContent="瞬峰EIRP / kW";
   const metricValue=document.createElement("div");metricValue.className="metric-value";metricValue.dataset.eirpIndex=String(i);metricValue.textContent="—";
   const metricDbw=document.createElement("small");metricDbw.className="metric-subvalue";metricDbw.dataset.eirpDbwIndex=String(i);metricDbw.textContent="— dBW";
   metric.appendChild(metricLabel);metric.appendChild(metricValue);metric.appendChild(metricDbw);cells.appendChild(metric);
@@ -62,7 +62,7 @@ function updateAntennaMetrics(){
   el.textContent=sci(eirpKw)+" kW";
   const dbw=document.querySelector('[data-eirp-dbw-index="'+i+'"]');
   if(dbw)dbw.textContent=(eirpW>0?(10*Math.log10(eirpW)).toFixed(2):"-∞")+" dBW";
-  el.title="EIRP = 节点输入功率 × 天线线性增益；"+(eirpKw).toLocaleString("zh-CN",{maximumFractionDigits:3})+" kW";
+  el.title="瞬时峰值EIRP = 节点瞬时峰值功率 × 天线线性增益（普通功率计对应的周期平均值为其 1/2）；"+(eirpKw).toLocaleString("zh-CN",{maximumFractionDigits:3})+" kW";
  });
 }
 function ePhasorPower(a){
@@ -149,7 +149,7 @@ function updateStudyReadouts(){
  const cycle=updateTargetCycleMaximum(prm);
  $("targetEStat").textContent=sci(inst.E);
  $("targetEMaxStat").textContent=sci(cycle.Emax);
- const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax");if(targetMaxEl)targetMaxEl.textContent="合成峰值 "+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="脉冲平顶/载波平均 "+sci(cycle.Smean)+" · 载波瞬峰 "+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
+ const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax");if(targetMaxEl)targetMaxEl.textContent="合成峰值 "+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="周期平均 "+sci(cycle.Smean)+" · 瞬时峰值 "+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
  $("targetSStat").textContent=sci(inst.S);
  $("targetSMaxStat").textContent=sci(cycle.Smax);
  updateStudyPlaneTitle();
@@ -285,8 +285,8 @@ function exportScanCSV(){
 }
 function configObject(){
  return {
-  application:"Wave Lab",schemaVersion:1,exportedAt:new Date().toISOString(),
-  parameters:{freq:state.freq,apX:state.apX,apY:state.apY,eta:state.eta,pointsPerWave:state.pointsPerWave,powerUnit:"kW",
+  application:"Wave Lab",schemaVersion:2,exportedAt:new Date().toISOString(),
+  parameters:{freq:state.freq,apX:state.apX,apY:state.apY,eta:state.eta,pointsPerWave:state.pointsPerWave,powerUnit:"kW",powerDefinition:"carrier_instantaneous_peak",
    Lx:state.Lx,Ly:state.Ly,Lz:state.Lz,zMin:state.zMin,centerX:state.centerX,centerY:state.centerY,
    target:{...state.target},cuts:{...state.cuts},nodes:state.nodes.map(n=>({x:n.x,y:n.y,z:n.z,phase:n.phase,power:n.power/1000}))},
   study:{axis:$("studyAxis").value,coord:Number($("studyCoord").value),active:state.studyPlane.active,scanSpan:state.scanSpan,aimMode:$("scanAimMode").value},
@@ -308,6 +308,8 @@ async function importConfig(file){
   if(!p||!Array.isArray(p.nodes)||p.nodes.length<1||p.nodes.length>64)throw Error("配置必须包含 1–64 个节点。");
   const num=(v,d,lo,hi,label)=>validNumber(v,d,lo,hi,label);
   // New configs store node power in kW; legacy configs without powerUnit use W.
+  if(p.powerDefinition&&p.powerDefinition!=="carrier_instantaneous_peak")throw Error("配置功率定义不匹配：此版本仅接受单频瞬时峰值功率。");
+  if(!p.powerDefinition)alert("该配置未声明功率含义；将按本版本约定，把功率数值解释为【单频微波周期内瞬时峰值】，周期平均功率为其一半。");
   const powerScale=p.powerUnit==="kW"?1000:1;
   if(p.powerUnit!==undefined&&p.powerUnit!=="kW"&&p.powerUnit!=="W")throw Error("配置中的功率单位不受支持。");
   const nodeList=p.nodes.map((n,i)=>({
@@ -850,11 +852,11 @@ function showLens(axis,e){
  const sMax=maxPowerFluxOverCycle(field);
  const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax");
  if(hoverE)hoverE.textContent="合成峰值 "+sci(peak.E)+" V/m";
- if(hoverS)hoverS.textContent="脉冲平顶/载波平均 "+sci(cycleMeanPowerDensity(field))+" · 载波瞬峰 "+sci(sMax)+" W/cm²";
+ if(hoverS)hoverS.textContent="周期平均 "+sci(cycleMeanPowerDensity(field))+" · 瞬时峰值 "+sci(sMax)+" W/cm²";
  syncCycleReadoutMode();
  const cycleMax=state.mode==="E"?peak.E:sMax;
  $("lensReading").textContent="瞬时值："+sci(current)+unit;
- $("lensMaxReading").textContent=state.mode==="E"?"周期合成峰值："+sci(cycleMax)+" V/m":"脉冲平顶/载波平均："+sci(cycleMeanPowerDensity(field))+" W/cm² · 载波瞬峰："+sci(sMax)+" W/cm²";
+ $("lensMaxReading").textContent=state.mode==="E"?"周期合成峰值："+sci(cycleMax)+" V/m":"周期平均："+sci(cycleMeanPowerDensity(field))+" W/cm² · 瞬时峰值："+sci(sMax)+" W/cm²";
  $("lensComponents").textContent="峰值分量：Ex="+sci(peak.ex)+"，Ey="+sci(peak.ey)+"，Ez="+sci(peak.ez)+" V/m；平方和开根号="+sci(peak.E)+" V/m";
  const div=$("lens");div.classList.add("show");div.setAttribute("aria-hidden","false");
  const W=270,H=445;let left=e.clientX+17,top=e.clientY+15;
