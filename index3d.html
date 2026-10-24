@@ -45,7 +45,7 @@
    <div class="timeline"><label for="time">周期时刻 <span id="timeValue" class="value">0.000 T</span></label><input type="range" id="time" min="0" max="1" step=".001" value="0"></div>
    <div class="speed"><label for="speed">播放速度</label><select id="speed"><option value=".25">慢</option><option value=".5" selected>中</option><option value="1">快</option></select></div>
  </div>
- <section class="figure card"><div class="fig-head"><h2>空间场分布</h2><div class="mode"><button id="modeE" class="selected">瞬时电场 |E|</button><button id="modeS">瞬时功率通量 |S|</button></div></div>
+ <section class="figure card"><div class="fig-head"><h2>空间场分布</h2><div class="mode"><button id="modeE" class="selected">瞬时电场 |E|</button><button id="modeS">瞬时功率通量 |S|</button><button id="modeQ" title="周期内电场峰值平方除以自由空间波阻抗；多方向波时不等于净能流">等效峰值功率密度 E²/Z₀</button></div></div>
   <div class="figure-layout">
    <div class="slice"><h3>YZ 截面 <span id="labelX">x = 0 m</span></h3><canvas id="plotX" width="580" height="675" aria-label="YZ 截面场图"></canvas></div>
    <div class="slice"><h3>XZ 截面 <span id="labelY">y = 0 m</span></h3><canvas id="plotY" width="580" height="675" aria-label="XZ 截面场图"></canvas></div>
