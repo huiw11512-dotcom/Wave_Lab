@@ -51,9 +51,9 @@
    <div class="timeline"><label for="time">周期时刻 <span id="timeValue" class="value">0.000 T</span></label><input type="range" id="time" min="0" max="1" step=".001" value="0"></div>
    <div class="speed"><label for="speed">播放速度</label><select id="speed"><option value=".25">慢</option><option value=".5" selected>中</option><option value="1">快</option></select></div>
  </div>
- <section class="figure card"><div class="fig-head"><h2>空间场分布</h2><div class="field-max-readout" aria-live="polite" aria-label="悬浮点与目标点的周期峰值"><div class="field-max-row"><span>悬浮点周期峰值</span><strong><span id="hoverTotalEmax">|E|max：悬停查看</span><span id="hoverTotalSmax" style="display:none">|S|max：悬停查看</span></strong></div><div class="field-max-row"><span>目标点周期峰值</span><strong><span id="targetTotalEmax">|E|max：—</span><span id="targetTotalSmax" style="display:none">|S|max：—</span></strong></div></div><div class="fig-tools">
+ <section class="figure card"><div class="fig-head"><h2>空间场分布</h2><div class="field-max-readout" aria-live="polite" aria-label="悬浮点与目标点的周期峰值"><div class="field-max-row"><span>悬浮点周期峰值</span><strong><span id="hoverTotalEmax">|E|max：悬停查看</span><span id="hoverTotalSmax" style="display:none">|S|max：悬停查看</span><span id="hoverTotalQmax" style="display:none">E²/Z₀：悬停查看</span></strong></div><div class="field-max-row"><span>目标点周期峰值</span><strong><span id="targetTotalEmax">|E|max：—</span><span id="targetTotalSmax" style="display:none">|S|max：—</span><span id="targetTotalQmax" style="display:none">E²/Z₀：—</span></strong></div></div><div class="fig-tools">
     <label class="max-toggle" for="showMaxPoint"><input id="showMaxPoint" type="checkbox" checked>显示最大值点</label>
-    <div class="mode"><button id="modeE" class="selected">瞬时电场 |E|</button><button id="modeS">载波瞬时功率通量 |S|</button></div>
+    <div class="mode"><button id="modeE" class="selected">瞬时电场 |E|</button><button id="modeS">载波瞬时功率通量 |S|</button><button id="modeQ" title="周期内电场峰值平方除以自由空间波阻抗；多方向波时不等于净能流">等效峰值功率密度 E²/Z₀</button></div>
   </div></div>
   <div class="figure-layout">
    <div class="slice"><h3>YZ 截面 <span id="labelX">x = 0 m</span></h3><canvas id="plotX" width="580" height="568" aria-label="YZ 截面场图"></canvas></div>
@@ -77,7 +77,7 @@
 
   <div id="thresholdControls" class="threshold-controls" aria-label="阈值区域可视化">
    <label class="threshold-enable" for="thresholdEnabled"><input id="thresholdEnabled" type="checkbox">启用阈值区域</label>
-   <div class="threshold-field"><label for="thresholdMode">阈值物理量</label><select id="thresholdMode"><option value="E">电场强度 |E|</option><option value="S">功率密度 |S|</option></select></div>
+   <div class="threshold-field"><label for="thresholdMode">阈值物理量</label><select id="thresholdMode"><option value="E">电场强度 |E|</option><option value="S">净功率通量 |S|</option><option value="Q">电场等效峰值功率密度 E²/Z₀</option></select></div>
    <div class="threshold-field threshold-value-field"><label for="thresholdValue">阈值（≥）</label><input id="thresholdValue" type="number" min="0" step="any" value="1000"></div>
    <strong id="thresholdUnit">V/m</strong>
    
@@ -91,6 +91,7 @@
    <div class="study-metric"><label>目标点周期最大电场</label><strong id="targetEMaxStat">—</strong><span>V/m</span></div>
    <div class="study-metric"><label>目标点瞬时功率通量</label><strong id="targetSStat">—</strong><span>W/cm²</span></div>
    <div class="study-metric"><label>目标点周期最大功率通量</label><strong id="targetSMaxStat">—</strong><span>W/cm²</span></div>
+   <div class="study-metric"><label>目标点电场等效峰值功率密度</label><strong id="targetQStat">—</strong><span>W/cm²</span></div>
    <div class="study-metric"><label>目标点相干合成比</label><strong id="coherenceStat">—</strong><span id="coherenceSub">参考：各节点电场相量模平方之和</span></div>
    <div class="study-metric"><label id="planeRangeLabel">当前平面场值范围</label><strong id="planeRangeStat">—</strong><span id="planeRangeSub">—</span></div>
   </div>
