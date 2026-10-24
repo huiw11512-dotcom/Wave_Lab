@@ -6,7 +6,7 @@ const state={
  freq:10,apX:5,apY:5,eta:.7,n:1000,pointsPerWave:8,centerX:0,centerY:0,savedOverview:null,Lx:50,Ly:50,Lz:60,zMin:-30,
  target:{x:0,y:10,z:20},cuts:{x:0,y:10,z:20},
  nodes:[{x:0,y:25,z:25,phase:-63,power:1000000},{x:0,y:25,z:-25,phase:-38,power:1000000},{x:0,y:-25,z:25,phase:-110,power:1000000},{x:0,y:-25,z:-25,phase:-3,power:1000000}],
- t:0,playing:false,speed:.5,mode:"E",thresholdEnabled:false,thresholds:{E:1000,S:1},data:null,rasters:{},scaleFactor:{E:1,S:1},manualScale:{E:null,S:null},tracePol:0,
+ t:0,playing:false,speed:.5,mode:"E",thresholdEnabled:false,thresholds:{E:1000,S:1,Q:1},data:null,rasters:{},scaleFactor:{E:1,S:1,Q:1},manualScale:{E:null,S:null,Q:null},tracePol:0,
  studyPlane:{axis:"x",coord:0,active:false},scanSpan:5,scanAimMode:"track",scanResult:null,coherenceRatio:null
 };
 let worker=null,job=0,timer=null,lastTime=0,lastPaint=0,hover=null,rendering=false,maxPointData=null,thresholdCloudCache={key:"",points:[]};
@@ -95,8 +95,8 @@ function updateStudyPlaneTitle(){
  const axis=selectedStudyAxis(),names={x:"YZ",y:"XZ",z:"XY"},coords=state.nodes.map(n=>n[axis]);
  const thickness=Math.max(...coords)-Math.min(...coords);
  $("studyPlaneTitle").textContent=names[axis]+" 平面 · "+axis+" = "+fmt(state.cuts[axis],3)+" m · 节点厚度 "+sci(thickness)+" m";
- $("planeRangeLabel").textContent="当前"+names[axis]+"截面 "+(state.mode==="E"?"电场最小 / 最大":"功率通量最小 / 最大");
- $("scanFieldTitle").textContent=state.mode==="E"?"目标穿面瞬时电场 |E(t)|":"目标穿面瞬时功率通量 |S(t)|";
+ $("planeRangeLabel").textContent="当前"+names[axis]+"截面 "+(state.mode==="E"?"电场最小 / 最大":state.mode==="Q"?"电场等效峰值功率密度最小 / 最大":"净功率通量最小 / 最大");
+ $("scanFieldTitle").textContent=state.mode==="E"?"目标穿面瞬时电场 |E(t)|":state.mode==="Q"?"目标穿面电场等效峰值功率密度 E²/Z₀":"目标穿面瞬时净功率通量 |S(t)|";
 }
 function peakTotalFieldComponents(a){
  // Find the carrier phase that maximizes the 3-D vector norm, then expose
@@ -109,6 +109,10 @@ function peakTotalFieldComponents(a){
  return {E:Math.hypot(ex,ey,ez),ex,ey,ez,t:((theta/(2*Math.PI))%1+1)%1};
 }
 function maxTotalFieldOverCycle(a){return peakTotalFieldComponents(a).E;}
+function peakElectricFieldEquivalentDensity(a){
+ const e=peakTotalFieldComponents(a).E;
+ return e*e/(F.Z0*1e4);
+}
 function cycleMeanPowerDensity(a){
  // Conventional time-averaged Poynting vector: (Er × Hr + Ei × Hi)/2.
  // F stores cosine and sine coefficient vectors; result is converted to W/cm².
@@ -131,17 +135,19 @@ function updateTargetCycleMaximum(prm){
  const key=JSON.stringify({freq:prm.freq,apX:prm.apX,apY:prm.apY,eta:prm.eta,target:prm.target,nodes:prm.nodes});
  if(targetCycleCache.key===key)return targetCycleCache;
  const phasor=F.fieldAt(prm,prm.target);
- const peak=peakTotalFieldComponents(phasor),Emax=peak.E,Smax=maxPowerFluxOverCycle(phasor),Smean=cycleMeanPowerDensity(phasor);
- targetCycleCache={key,Emax,Smax,Smean,peak};
+ const peak=peakTotalFieldComponents(phasor),Emax=peak.E,Smax=maxPowerFluxOverCycle(phasor),Smean=cycleMeanPowerDensity(phasor),Qmax=Emax*Emax/(F.Z0*1e4);
+ targetCycleCache={key,Emax,Smax,Smean,Qmax,peak};
  return targetCycleCache;
 }
 function syncCycleReadoutMode(){
- const isE=state.mode==="E";
- const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax"),targetE=$("targetTotalEmax"),targetS=$("targetTotalSmax");
+ const isE=state.mode==="E",isQ=state.mode==="Q";
+ const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax"),hoverQ=$("hoverTotalQmax"),targetE=$("targetTotalEmax"),targetS=$("targetTotalSmax"),targetQ=$("targetTotalQmax");
  if(hoverE)hoverE.style.display=isE?"":"none";
- if(hoverS)hoverS.style.display=isE?"none":"";
+ if(hoverS)hoverS.style.display=(!isE&&!isQ)?"":"none";
+ if(hoverQ)hoverQ.style.display=isQ?"":"none";
  if(targetE)targetE.style.display=isE?"":"none";
- if(targetS)targetS.style.display=isE?"none":"";
+ if(targetS)targetS.style.display=(!isE&&!isQ)?"":"none";
+ if(targetQ)targetQ.style.display=isQ?"":"none";
 }
 function updateStudyReadouts(){
  if(!state.data)return;
@@ -149,9 +155,9 @@ function updateStudyReadouts(){
  const cycle=updateTargetCycleMaximum(prm);
  $("targetEStat").textContent=sci(inst.E);
  $("targetEMaxStat").textContent=sci(cycle.Emax);
- const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax");if(targetMaxEl)targetMaxEl.textContent="合成峰值 "+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="周期平均 "+sci(cycle.Smean)+" · 瞬时峰值 "+sci(cycle.Smax)+" W/cm²";syncCycleReadoutMode();
+ const targetMaxEl=$("targetTotalEmax"),targetSMaxEl=$("targetTotalSmax"),targetQMaxEl=$("targetTotalQmax");if(targetMaxEl)targetMaxEl.textContent="合成峰值 "+sci(cycle.Emax)+" V/m";if(targetSMaxEl)targetSMaxEl.textContent="周期平均 "+sci(cycle.Smean)+" · 瞬时峰值 "+sci(cycle.Smax)+" W/cm²";if(targetQMaxEl)targetQMaxEl.textContent="E²/Z₀ 峰值 "+sci(cycle.Qmax)+" W/cm²";syncCycleReadoutMode();
  $("targetSStat").textContent=sci(inst.S);
- $("targetSMaxStat").textContent=sci(cycle.Smax);
+ $("targetSMaxStat").textContent=sci(cycle.Smax);const targetQStat=$("targetQStat");if(targetQStat)targetQStat.textContent=sci(cycle.Qmax);
  updateStudyPlaneTitle();
  const axis=selectedStudyAxis(),view=state.values&&state.values[axis];
  if(!view||!view.vals.length)return;
@@ -252,10 +258,10 @@ function drawScanPlot(){
  if(!state.scanResult){
   empty(c1,"点击“扫描目标穿面”生成场强曲线");empty(c2,"扫描后显示相干合成比");$("exportScan").disabled=true;return;
  }
- const r=state.scanResult,mode=state.mode,key=mode==="E"?"E":"S",unit=mode==="E"?"V/m":"W/cm²";
- $("scanFieldTitle").textContent=mode==="E"?"目标穿面瞬时电场 |E(t)|":"目标穿面瞬时功率通量 |S(t)|";
+ const r=state.scanResult,mode=state.mode,key=mode==="E"?"E":mode==="Q"?"Q":"S",unit=mode==="E"?"V/m":"W/cm²";
+ $("scanFieldTitle").textContent=mode==="E"?"目标穿面瞬时电场 |E(t)|":mode==="Q"?"目标穿面电场等效峰值功率密度 E²/Z₀":"目标穿面瞬时净功率通量 |S(t)|";
  const points=r.points.map(p=>({...p,ratioPct:p.ratio*100}));
- drawLineChart(c1,points,key,{span:r.span,color:mode==="E"?"#2455d4":"#d9434e",yLabel:mode==="E"?"|E(t)| · V/m":"|S(t)| · W/cm²"});
+ drawLineChart(c1,points,key,{span:r.span,color:mode==="E"?"#2455d4":mode==="Q"?"#d17d45":"#d9434e",yLabel:mode==="E"?"|E(t)| · V/m":mode==="Q"?"E²/Z₀ · W/cm²":"|S(t)| · W/cm²"});
  drawLineChart(c2,points,"ratioPct",{span:r.span,color:"#d9434e",reference:100,formatY:v=>v.toFixed(0)+"%",yLabel:"矢量相干合成比 / %"});
  let lo=0,hi=0;for(let i=1;i<points.length;i++){if(points[i][key]<points[lo][key])lo=i;if(points[i][key]>points[hi][key])hi=i;}
  let rMin=Infinity,rMax=-Infinity;for(const p of points){rMin=Math.min(rMin,p.ratioPct);rMax=Math.max(rMax,p.ratioPct);}
@@ -272,15 +278,15 @@ function scanThroughPlane(){
   const aimTarget=plane.aimMode==="track"?xyz:base.target;
   const total=F.fieldAtAimed(prm,xyz,aimTarget),inst=F.instantaneous(total,state.t);let reference=0;
   for(let k=0;k<state.nodes.length;k++)reference+=ePhasorPower(F.fieldAtAimed(prm,xyz,aimTarget,k));
-  const ratio=reference>1e-30?ePhasorPower(total)/reference:0;
-  points.push({offsetLambda:offset,coordinate,E:inst.E,S:inst.S,ratio});
+  const ratio=reference>1e-30?ePhasorPower(total)/reference:0,Q=peakElectricFieldEquivalentDensity(total);
+  points.push({offsetLambda:offset,coordinate,E:inst.E,S:inst.S,Q,ratio});
  }
  state.scanResult={axis:plane.axis,coord:plane.coord,span:plane.span,lambda,t:state.t,aimMode:plane.aimMode,points};drawScanPlot();
 }
 function exportScanCSV(){
  if(!state.scanResult)return;
- const r=state.scanResult,lines=["offset_lambda,coordinate_m,E_inst_Vpm,Poynting_inst_Wpcm2,coherent_ratio_percent,time_over_T"];
- r.points.forEach(p=>lines.push([p.offsetLambda,p.coordinate,p.E,p.S,p.ratio*100,r.t].map(v=>Number(v).toPrecision(10)).join(",")));
+ const r=state.scanResult,lines=["offset_lambda,coordinate_m,E_inst_Vpm,Poynting_inst_Wpcm2,E2_over_Z0_peak_Wpcm2,coherent_ratio_percent,time_over_T"];
+ r.points.forEach(p=>lines.push([p.offsetLambda,p.coordinate,p.E,p.S,p.Q,p.ratio*100,r.t].map(v=>Number(v).toPrecision(10)).join(",")));
  download(new Blob(["\ufeff",lines.join("\n")],{type:"text/csv;charset=utf-8"}),"WaveLab_plane_crossing_scan.csv");
 }
 function configObject(){
@@ -329,10 +335,10 @@ async function importConfig(file){
   state.studyPlane={axis,coord:num(st.coord,cuts[axis],-1e7,1e7,"研究平面位置"),active:!!st.active};
   if(state.studyPlane.active)state.cuts[axis]=state.studyPlane.coord;
   const d=root.display||{};
-  state.mode=d.mode==="S"?"S":"E";state.t=num(d.t,state.t,0,1,"周期时刻");
+  state.mode=d.mode==="Q"?"Q":d.mode==="S"?"S":"E";state.t=num(d.t,state.t,0,1,"周期时刻");
   state.speed=[.25,.5,1].includes(Number(d.speed))?Number(d.speed):.5;
-  if(d.scaleFactor)for(const m of ["E","S"])if(Number.isFinite(Number(d.scaleFactor[m]))&&Number(d.scaleFactor[m])>0)state.scaleFactor[m]=F.clamp(Number(d.scaleFactor[m]),1e-8,100);
-  state.manualScale={E:null,S:null};
+  if(d.scaleFactor)for(const m of ["E","S","Q"])if(Number.isFinite(Number(d.scaleFactor[m]))&&Number(d.scaleFactor[m])>0)state.scaleFactor[m]=F.clamp(Number(d.scaleFactor[m]),1e-8,100);
+  state.manualScale={E:null,S:null,Q:null};
   if(d.manualScale)for(const m of ["E","S"])state.manualScale[m]=Number.isFinite(Number(d.manualScale[m]))&&Number(d.manualScale[m])>0?Number(d.manualScale[m]):null;
   state.savedOverview=null;state.scanResult=null;state.coherenceRatio=null;
   $("freq").value=state.freq;$("apX").value=state.apX;$("apY").value=state.apY;$("eta").value=state.eta;$("pointsPerWave").value=String(state.pointsPerWave);
@@ -340,7 +346,7 @@ async function importConfig(file){
   $("targetX").value=target.x;$("targetY").value=target.y;$("targetZ").value=target.z;
   $("studyAxis").value=axis;$("studyCoord").value=state.studyPlane.coord;$("scanSpan").value=state.scanSpan;$("scanAimMode").value=state.scanAimMode;$("count").value=state.nodes.length;
   $("time").value=state.t;$("speed").value=state.speed;
-  $("modeE").classList.toggle("selected",state.mode==="E");$("modeS").classList.toggle("selected",state.mode==="S");syncThresholdControls();
+  $("modeE").classList.toggle("selected",state.mode==="E");$("modeS").classList.toggle("selected",state.mode==="S");$("modeQ").classList.toggle("selected",state.mode==="Q");syncThresholdControls();
   renderNodes();syncViewInput();drawScanPlot();updateExtras();queue();
  }catch(e){alert("配置导入失败。\n"+(e&&e.message?e.message:String(e)));}
 }
@@ -372,10 +378,11 @@ function bind(){
  $("randomPhase").addEventListener("click",()=>{state.nodes.forEach(n=>n.phase=Math.round(Math.random()*360-180));renderNodes();queue();});
  $("showMaxPoint").addEventListener("change",()=>recolorOnly());
  $("thresholdEnabled").addEventListener("change",e=>{state.thresholdEnabled=e.target.checked;syncThresholdControls();thresholdCloudCache.key="";recolorOnly();renderScene();});
- $("thresholdMode").addEventListener("change",e=>setMode(e.target.value==="S"?"S":"E"));
+ $("thresholdMode").addEventListener("change",e=>setMode(e.target.value==="Q"?"Q":e.target.value==="S"?"S":"E"));
  $("thresholdValue").addEventListener("change",e=>{const v=Number(e.target.value);if(e.target.value.trim()===""||!Number.isFinite(v)||v<0){syncThresholdControls();return;}state.thresholds[state.mode]=v;thresholdCloudCache.key="";recolorOnly();renderScene();});
  $("modeE").addEventListener("click",()=>setMode("E"));
  $("modeS").addEventListener("click",()=>setMode("S"));
+ $("modeQ").addEventListener("click",()=>setMode("Q"));
  $("scaleLimit").addEventListener("input",e=>{
   // Adjust an absolute display cap; at the far right, return to automatic scaling.
   const position=Number(e.target.value),factor=Math.pow(10,3*(position/1000-1));
@@ -437,7 +444,7 @@ function syncThresholdControls(){
  if(wrap)wrap.classList.toggle("enabled",state.thresholdEnabled);
 }
 function setMode(mode){
- state.mode=mode;$("modeE").classList.toggle("selected",mode==="E");$("modeS").classList.toggle("selected",mode==="S");syncThresholdControls();drawDynamic();drawScanPlot();renderScene();
+ state.mode=mode;$("modeE").classList.toggle("selected",mode==="E");$("modeS").classList.toggle("selected",mode==="S");$("modeQ").classList.toggle("selected",mode==="Q");syncThresholdControls();drawDynamic();drawScanPlot();renderScene();
 }
 const MAX_GRID=1000;
 function gridLimitForNodes(){return Math.max(128,Math.min(MAX_GRID,Math.floor(MAX_GRID*Math.sqrt(4/state.nodes.length))));}
@@ -522,6 +529,13 @@ const lutE=makeColors(paletteE),lutS=makeColors(paletteS);
 function instantValue(f,index,co,si,mode){
  const ex=f.erx[index]*co+f.eix[index]*si,ey=f.ery[index]*co+f.eiy[index]*si,ez=f.erz[index]*co+f.eiz[index]*si;
  if(mode==="E")return Math.hypot(ex,ey,ez);
+ if(mode==="Q"){
+  const A=f.erx[index]*f.erx[index]+f.ery[index]*f.ery[index]+f.erz[index]*f.erz[index];
+  const B=f.erx[index]*f.eix[index]+f.ery[index]*f.eiy[index]+f.erz[index]*f.eiz[index];
+  const C=f.eix[index]*f.eix[index]+f.eiy[index]*f.eiy[index]+f.eiz[index]*f.eiz[index];
+  const e2=.5*(A+C+Math.hypot(A-C,2*B));
+  return e2/(F.Z0*1e4);
+ }
  const hx=f.hrx[index]*co+f.hix[index]*si,hy=f.hry[index]*co+f.hiy[index]*si,hz=f.hrz[index]*co+f.hiz[index]*si;
  return Math.hypot(ey*hz-ez*hy,ez*hx-ex*hz,ex*hy-ey*hx)/1e4;
 }
@@ -570,10 +584,10 @@ function updateMaxPointData(){
  });
  const global=local.reduce((best,item)=>item.value>best.value?item:best,local[0]);
  maxPointData={local,global};
- const unit=state.mode==="E"?"V/m":"W/cm²",quantity=state.mode==="E"?"|E|":"|S|";
+ const unit=state.mode==="E"?"V/m":"W/cm²",quantity=state.mode==="E"?"|E|":state.mode==="Q"?"E²/Z₀":"|S|";
  const xyz=q=>"x="+fmt(q.x,2)+", y="+fmt(q.y,2)+", z="+fmt(q.z,2);
  const globalEl=$("globalMaxText"),localEl=$("localMaxText");
- if(globalEl)globalEl.textContent="三切片全局最大 "+quantity+"："+names[global.axis]+" 截面 · ("+xyz(global.point)+") m · "+sci(global.value)+" "+unit+" · t/T="+fmt(state.t,3);
+ if(globalEl)globalEl.textContent="三切片全局最大 "+quantity+"："+names[global.axis]+" 截面 · ("+xyz(global.point)+") m · "+sci(global.value)+" "+unit+(state.mode==="Q"?" · 周期峰值":" · t/T="+fmt(state.t,3));
  if(localEl)localEl.textContent="各截面局部最大："+local.map(q=>names[q.axis]+" "+sci(q.value)+" "+unit+" @ ("+xyz(q.point)+") m").join("；");
 }
 function drawMaxPointMarker(ctx,axis,item,isGlobal){
@@ -667,7 +681,7 @@ function recolorOnly(){
   drawSlice(axis,maps[axis],cap);
  }
  state.rasters=maps;state.scale=cap;
- $("scaleUnit").textContent=state.mode==="E"?"瞬时电场强度 |E(t)| · V/m":"瞬时功率通量 |S(t)| · W/cm²";
+ $("scaleUnit").textContent=state.mode==="E"?"瞬时电场强度 |E(t)| · V/m":state.mode==="Q"?"电场等效峰值功率密度 E²/Z₀ · W/cm²":"瞬时净功率通量 |S(t)| · W/cm²";
  syncColorBar();
  if(hover){const h=hover;hover=null;showLens(h.axis,h.event);}
  renderScene();
@@ -734,14 +748,15 @@ function axisGizmo(){
 }
 function thresholdCloud(prm,x0,x1,y0,y1,z0,z1){
  if(!state.thresholdEnabled)return [];
- const time=(Math.round(state.t*25)/25)%1,threshold=state.thresholds[state.mode];
+ const time=state.mode==="Q"?0:(Math.round(state.t*25)/25)%1,threshold=state.thresholds[state.mode];
  const key=JSON.stringify({p:prm,mode:state.mode,threshold,time});
  if(thresholdCloudCache.key===key)return thresholdCloudCache.points;
  const N=10,points=[];
  for(let iz=0;iz<N;iz++)for(let iy=0;iy<N;iy++)for(let ix=0;ix<N;ix++){
   const point={x:x0+(ix+.5)/N*(x1-x0),y:y0+(iy+.5)/N*(y1-y0),z:z0+(iz+.5)/N*(z1-z0)};
-  const instant=F.instantaneous(F.fieldAt(prm,point),time);
-  if((state.mode==="E"?instant.E:instant.S)>=threshold)points.push(point);
+  const field=F.fieldAt(prm,point),instant=F.instantaneous(field,time);
+  const value=state.mode==="E"?instant.E:state.mode==="Q"?peakElectricFieldEquivalentDensity(field):instant.S;
+  if(value>=threshold)points.push(point);
  }
  thresholdCloudCache={key,points};
  return points;
@@ -831,7 +846,7 @@ function plotUV(canvas,e){
  if(u<0||u>1||v<0||v>1)return null;
  return {u,v};
 }
-function hideLens(){hover=null;const e=$("hoverTotalEmax"),s=$("hoverTotalSmax");if(e)e.textContent="|E|max：悬停查看";if(s)s.textContent="|S|max：悬停查看";$("lens").classList.remove("show");$("lens").setAttribute("aria-hidden","true");}
+function hideLens(){hover=null;const e=$("hoverTotalEmax"),s=$("hoverTotalSmax"),q=$("hoverTotalQmax");if(e)e.textContent="|E|max：悬停查看";if(s)s.textContent="|S|max：悬停查看";if(q)q.textContent="E²/Z₀：悬停查看";$("lens").classList.remove("show");$("lens").setAttribute("aria-hidden","true");}
 function showLens(axis,e){
  if(!state.rasters[axis])return;
  const rawUV=plotUV($("plot"+axis.toUpperCase()),e);
@@ -848,15 +863,16 @@ function showLens(axis,e){
  const xyz=snapToTarget?{...prm.target}:F.planePoint(prm,axis,uv.u,uv.v);
  $("lensCoord").textContent=F.AXES.map(k=>k+"="+fmt(xyz[k],2)).join("  ")+" m";
  const field=F.fieldAt(prm,xyz),direct=F.instantaneous(field,state.t),peak=peakTotalFieldComponents(field);
- const unit=state.mode==="E"?" V/m":" W/cm²",current=state.mode==="E"?direct.E:direct.S;
- const sMax=maxPowerFluxOverCycle(field);
- const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax");
+ const unit=state.mode==="E"?" V/m":" W/cm²",current=state.mode==="E"?direct.E:state.mode==="Q"?peakElectricFieldEquivalentDensity(field):direct.S;
+ const sMax=maxPowerFluxOverCycle(field),qMax=peakElectricFieldEquivalentDensity(field);
+ const hoverE=$("hoverTotalEmax"),hoverS=$("hoverTotalSmax"),hoverQ=$("hoverTotalQmax");
  if(hoverE)hoverE.textContent="合成峰值 "+sci(peak.E)+" V/m";
  if(hoverS)hoverS.textContent="周期平均 "+sci(cycleMeanPowerDensity(field))+" · 瞬时峰值 "+sci(sMax)+" W/cm²";
+ if(hoverQ)hoverQ.textContent="E²/Z₀ 峰值 "+sci(qMax)+" W/cm²";
  syncCycleReadoutMode();
- const cycleMax=state.mode==="E"?peak.E:sMax;
- $("lensReading").textContent="瞬时值："+sci(current)+unit;
- $("lensMaxReading").textContent=state.mode==="E"?"周期合成峰值："+sci(cycleMax)+" V/m":"周期平均："+sci(cycleMeanPowerDensity(field))+" W/cm² · 瞬时峰值："+sci(sMax)+" W/cm²";
+ const cycleMax=state.mode==="E"?peak.E:state.mode==="Q"?qMax:sMax;
+ $("lensReading").textContent=state.mode==="Q"?"周期峰值指标："+sci(current)+unit:"瞬时值："+sci(current)+unit;
+ $("lensMaxReading").textContent=state.mode==="E"?"周期合成峰值："+sci(cycleMax)+" V/m":state.mode==="Q"?"电场等效峰值功率密度："+sci(cycleMax)+" W/cm²":"周期平均："+sci(cycleMeanPowerDensity(field))+" W/cm² · 瞬时峰值："+sci(sMax)+" W/cm²";
  $("lensComponents").textContent="峰值分量：Ex="+sci(peak.ex)+"，Ey="+sci(peak.ey)+"，Ez="+sci(peak.ez)+" V/m；平方和开根号="+sci(peak.E)+" V/m";
  const div=$("lens");div.classList.add("show");div.setAttribute("aria-hidden","false");
  const W=270,H=445;let left=e.clientX+17,top=e.clientY+15;
@@ -906,14 +922,14 @@ function exportPNG(){
  const c=document.createElement("canvas"),g=c.getContext("2d");c.width=1960;c.height=900;
  g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);
  g.fillStyle="#1e394d";g.font="bold 37px Arial";g.fillText("Wave Lab · 三维空间正交切片",55,62);
- g.fillStyle="#6c8290";g.font="22px Arial";g.fillText("f = "+state.freq+" GHz     t/T = "+fmt(state.t,3)+"     3 × "+state.n+"²     "+(state.mode==="E"?"|E(t)| / V/m":"|S(t)| / W/cm²"),55,103);
+ g.fillStyle="#6c8290";g.font="22px Arial";g.fillText("f = "+state.freq+" GHz     t/T = "+fmt(state.t,3)+"     3 × "+state.n+"²     "+(state.mode==="E"?"|E(t)| / V/m":state.mode==="Q"?"E²/Z₀ peak / W/cm²":"|S(t)| / W/cm²"),55,103);
  F.AXES.forEach((axis,i)=>{
   const x=25+i*645,gapY=158;
   g.fillStyle="#24455a";g.font="bold 25px Arial";
   const r=F.ranges(params(),axis);g.fillText(["(a) YZ","(b) XZ","(c) XY"][i]+"　"+axis+" = "+fmt(state.cuts[axis],2)+" m",x+64,145);
   g.drawImage($("plot"+axis.toUpperCase()),x,gapY,640,626);
  });
- const unit=state.mode==="E"?"瞬时电场强度 |E(t)| · V/m":"瞬时功率通量 |S(t)| · W/cm²";
+ const unit=state.mode==="E"?"瞬时电场强度 |E(t)| · V/m":state.mode==="Q"?"电场等效峰值功率密度 E²/Z₀ · W/cm²":"瞬时净功率通量 |S(t)| · W/cm²";
  g.font="bold 22px Arial";g.fillStyle="#40566a";g.textAlign="center";g.fillText(unit,980,824);
  const lut=state.mode==="E"?lutE:lutS;
  for(let i=0;i<256;i++){g.fillStyle="rgb("+lut[3*i]+","+lut[3*i+1]+","+lut[3*i+2]+")";g.fillRect(545+i*870/256,835,870/256+1,19);}
@@ -923,7 +939,7 @@ function exportPNG(){
 function exportCSV(){
  if(!state.data)return;
  const n=state.data.n,prm=params(),co=Math.cos(TWO*state.t),si=Math.sin(TWO*state.t);
- const valueName=state.mode==="E"?"E_inst_Vpm":"Poynting_inst_Wpcm2";
+ const valueName=state.mode==="E"?"E_inst_Vpm":state.mode==="Q"?"E2_over_Z0_peak_Wpcm2":"Poynting_inst_Wpcm2";
  const lines=["plane,x_m,y_m,z_m,"+valueName];
  for(const axis of ["x","y","z"]){
   const f=state.data.axes[axis].fields;
